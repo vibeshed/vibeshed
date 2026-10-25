@@ -19,8 +19,22 @@ enum FontActivation {
     static func activate(_ paths: [String], scope: CTFontManagerScope = .session) async -> Outcome {
         let missing = unlisted(paths, available: availableFontPaths())
         guard !missing.isEmpty else { return Outcome() }
-        let failed = await register(missing, scope: scope)
+        let failed = await withEachURL(of: missing, ignoring: .alreadyRegistered) { urls, handler in
+            CTFontManagerRegisterFontURLs(urls, scope, true, handler)
+        }
         return Outcome(registered: missing.filter { failed[$0] == nil }, failed: failed)
+    }
+
+    /// Unregisters the files among `paths` that `activate` registered, in this process or
+    /// an earlier one, so their fonts don't outlive them. CoreText can't unregister a
+    /// deleted file, so this goes before deleting them. Returns the files unregistered.
+    static func deactivate(_ paths: [String], scope: CTFontManagerScope = .session) async -> [String] {
+        let registered = paths.filter { CTFontManagerGetScopeForURL(URL(fileURLWithPath: $0) as CFURL) == scope }
+        guard !registered.isEmpty else { return [] }
+        let failed = await withEachURL(of: registered, ignoring: .notRegistered) { urls, handler in
+            CTFontManagerUnregisterFontURLs(urls, scope, handler)
+        }
+        return registered.filter { failed[$0] == nil }
     }
 
     /// The `paths` that exist but aren't among the `available` font files.
@@ -38,15 +52,19 @@ enum FontActivation {
         Set((CTFontManagerCopyAvailableFontURLs() as? [URL] ?? []).map(\.path))
     }
 
-    /// Registers `paths`, returning CoreText's error code for each one that failed. A file
-    /// that's already registered in `scope` hasn't failed.
-    private static func register(_ paths: [String], scope: CTFontManagerScope) async -> [String: Int] {
+    /// Runs a CoreText (un)registration of `paths`, returning its error code for each one
+    /// that failed. An `ignored` error (the file already was what was asked) isn't a failure.
+    private static func withEachURL(
+        of paths: [String],
+        ignoring ignored: CTFontManagerError,
+        _ call: (CFArray, @escaping (CFArray, Bool) -> Bool) -> Void
+    ) async -> [String: Int] {
         let urls = paths.map { URL(fileURLWithPath: $0) }
         return await withCheckedContinuation { continuation in
             var failed: [String: Int] = [:]
-            CTFontManagerRegisterFontURLs(urls as CFArray, scope, true) { errors, done in
+            call(urls as CFArray) { errors, done in
                 let errors = errors as? [NSError] ?? []
-                for error in errors where error.code != CTFontManagerError.alreadyRegistered.rawValue {
+                for error in errors where error.code != ignored.rawValue {
                     for url in error.userInfo[kCTFontManagerErrorFontURLsKey as String] as? [URL] ?? [] {
                         failed[url.path] = error.code
                     }

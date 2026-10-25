@@ -1,7 +1,7 @@
 import Foundation
 
-/// The install actions' work. Installing something a Vibeshed module works with
-/// (Spotify, iTerm, `gh`, …) also turns that module on in config.yaml.
+/// The install actions' work, and the cask uninstall's. Installing something a Vibeshed
+/// module works with (Spotify, iTerm, `gh`, …) also turns that module on in config.yaml.
 extension HomebrewModule {
     func install(formula name: String, brewPath: String) async throws -> ActionResult {
         let before = SoftwareIntegration.detectedModuleIDs()
@@ -28,6 +28,25 @@ extension HomebrewModule {
         }
         let lines = [launched, enabled, summary].compactMap(\.self)
         return .showResult(title: "Installed \(name)", body: lines.joined(separator: "\n"))
+    }
+
+    func uninstall(cask name: String, brewPath: String) async throws -> ActionResult {
+        // Fonts `activateFonts` registered would stay listed after their files are gone,
+        // and CoreText can only unregister them while the files are there.
+        let cask = try? await HomebrewManager.cask(name, brewPath: brewPath)
+        let unregistered = await FontActivation.deactivate(cask?.fontPaths ?? [])
+        if !unregistered.isEmpty {
+            log.info("Unregistered \(unregistered.count) font files before uninstalling \(name, privacy: .public)")
+        }
+        let output: String
+        do {
+            output = try await HomebrewManager.uninstallCask(name, brewPath: brewPath)
+        } catch {
+            await activateFonts(unregistered)
+            throw error
+        }
+        invalidatePackageCache()
+        return .showResult(title: "Uninstalled \(name)", body: output)
     }
 
     /// Makes a cask's fonts usable right away, in Switch Font and in the apps it sets them

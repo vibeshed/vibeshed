@@ -28,7 +28,7 @@ final class FontActivationTests: XCTestCase {
         XCTAssertFalse(available.contains { $0.contains("#") })
     }
 
-    func testRegistersAFontFileCoreTextDoesntList() async throws {
+    func testRegistersAndUnregistersAFontFileCoreTextDoesntList() async throws {
         let copy = directory.appendingPathComponent("Menlo.ttc")
         try FileManager.default.copyItem(at: URL(fileURLWithPath: "/System/Library/Fonts/Menlo.ttc"), to: copy)
 
@@ -38,7 +38,19 @@ final class FontActivationTests: XCTestCase {
         // Registering it again isn't a failure.
         let again = await FontActivation.activate([copy.path], scope: .process)
         XCTAssertEqual(again.failed, [:])
-        CTFontManagerUnregisterFontURLs([copy] as CFArray, .process, nil)
+
+        let unregistered = await FontActivation.deactivate([copy.path], scope: .process)
+        XCTAssertEqual(unregistered, [copy.path])
+        XCTAssertEqual(CTFontManagerGetScopeForURL(copy as CFURL), .none)
+        let none = await FontActivation.deactivate([copy.path], scope: .process)
+        XCTAssertEqual(none, [])
+    }
+
+    func testLeavesFontsItDidntRegisterAlone() async {
+        // The system's own fonts, like the ones fontd finds in font folders, aren't process-scoped.
+        let unregistered = await FontActivation.deactivate(["/System/Library/Fonts/Menlo.ttc"], scope: .process)
+        XCTAssertEqual(unregistered, [])
+        XCTAssertTrue(FontActivation.availableFontPaths().contains("/System/Library/Fonts/Menlo.ttc"))
     }
 
     func testSkipsListedAndMissingFilesAndReportsOnesThatArentFonts() async throws {
