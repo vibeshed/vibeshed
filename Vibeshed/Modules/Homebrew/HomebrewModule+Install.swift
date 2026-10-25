@@ -18,14 +18,28 @@ extension HomebrewModule {
             HomebrewManager.installCask(name, brewPath: brewPath)
         )
         invalidatePackageCache()
-        // The install already succeeded; a failed app lookup or launch shouldn't turn it into an error.
-        let appPaths = await (try? HomebrewManager.caskAppPaths(name, brewPath: brewPath)) ?? []
+        // The install already succeeded; a failed lookup or launch shouldn't turn it into an error.
+        let cask = try? await HomebrewManager.cask(name, brewPath: brewPath)
+        await activateFonts(cask?.fontPaths ?? [])
+        let appPaths = cask?.appPaths ?? []
         let enabled = await enableModulesForInstall(since: before, appPaths: appPaths)
         let launched = await HomebrewManager.launchFirstApp(at: appPaths).map { path in
             "Launched " + URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
         }
         let lines = [launched, enabled, summary].compactMap(\.self)
         return .showResult(title: "Installed \(name)", body: lines.joined(separator: "\n"))
+    }
+
+    /// Makes a cask's fonts usable right away, in Switch Font and in the apps it sets them
+    /// in. fontd misses them when the cask created ~/Library/Fonts, as on a new account.
+    private func activateFonts(_ paths: [String]) async {
+        let outcome = await FontActivation.activate(paths)
+        if !outcome.registered.isEmpty {
+            log.info("Registered \(outcome.registered.count) font files fontd hadn't picked up")
+        }
+        for (path, code) in outcome.failed.sorted(by: { $0.key < $1.key }) {
+            log.warning("Couldn't register font \(path, privacy: .public): CoreText error \(code)")
+        }
     }
 
     /// Turns on the modules for software that wasn't there `before` (module IDs) and is

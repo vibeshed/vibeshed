@@ -82,10 +82,9 @@ enum HomebrewManager {
             .sorted { $0.token.localizedStandardCompare($1.token) == .orderedAscending }
     }
 
-    /// Installed locations of a cask's `app` artifacts (e.g. `/Applications/Foo.app`).
-    /// Empty for casks that ship no app bundle (fonts, pkg installers, CLI tools).
-    static func caskAppPaths(_ name: String, brewPath: String) async throws -> [String] {
-        try await packages([name], isCask: true, brewPath: brewPath).flatMap(\.appPaths)
+    /// Details for one cask, including where its apps and fonts install.
+    static func cask(_ name: String, brewPath: String) async throws -> HomebrewPackage? {
+        try await packages([name], isCask: true, brewPath: brewPath).first
     }
 
     // MARK: - Launch
