@@ -46,6 +46,9 @@ struct AISession: Sendable {
     /// Git branch the session was working on, when the surface records it.
     let branch: String?
     let timestamp: Date
+    /// What the session is blocked on until the user answers, e.g. "permission
+    /// prompt" or "input needed"; nil while it works or sits idle.
+    var waitingFor: String?
 
     init(
         sessionID: String,
@@ -56,7 +59,8 @@ struct AISession: Sendable {
         project: String? = nil,
         model: String? = nil,
         branch: String? = nil,
-        timestamp: Date
+        timestamp: Date,
+        waitingFor: String? = nil
     ) {
         self.sessionID = sessionID
         self.cliSessionID = cliSessionID
@@ -67,6 +71,7 @@ struct AISession: Sendable {
         self.model = model
         self.branch = branch
         self.timestamp = timestamp
+        self.waitingFor = waitingFor
     }
 
     /// A copy with the model and branch replaced by fresher values, such as ones read
@@ -81,7 +86,8 @@ struct AISession: Sendable {
             project: project,
             model: model ?? self.model,
             branch: branch ?? self.branch,
-            timestamp: timestamp
+            timestamp: timestamp,
+            waitingFor: waitingFor
         )
     }
 

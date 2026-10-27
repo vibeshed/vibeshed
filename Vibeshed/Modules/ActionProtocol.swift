@@ -86,6 +86,11 @@ protocol Action: Sendable, Identifiable where ID == ActionID {
     /// picker like a plain run instead of keeping it open. Default `false`.
     var typesIntoFrontmostApp: Bool { get }
 
+    /// The thing this action opens is blocked until the user answers it, such as an
+    /// agent session sitting on a permission prompt or a question. Ranked above
+    /// comparable matches; see `ActionScorer.awaitingUserBoost`. Default `false`.
+    var isAwaitingUser: Bool { get }
+
     @MainActor
     func makeListItemView() -> AnyView?
     @MainActor
@@ -134,6 +139,10 @@ extension Action {
     }
 
     var typesIntoFrontmostApp: Bool {
+        false
+    }
+
+    var isAwaitingUser: Bool {
         false
     }
 

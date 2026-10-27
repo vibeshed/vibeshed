@@ -10,11 +10,13 @@ import Foundation
 enum RankingCorpus {
     static let spotifyApp = "application/app.com.spotify.client"
     static let mindSession = "anthropic/session.mind"
+    static let lintSession = "anthropic/session.lint"
     static let pairingEvent = "calendar/event.pairing"
 
     /// `pairingStartsIn` places the "Pairing session" event that many minutes after
-    /// `now`; nil leaves it out of the calendar.
-    static func build(now: Date, pairingStartsIn: Double?) async -> [ScorableAction] {
+    /// `now`; nil leaves it out of the calendar. `awaiting` names the Claude session
+    /// that is waiting on the user, if any.
+    static func build(now: Date, pairingStartsIn: Double?, awaiting: String? = nil) async -> [ScorableAction] {
         let scoring = ScoringContext(usageCounts: [:], lastUsedDates: [:], query: "", systemContext: nil)
         let theme = ThemeModule()
         await theme.configDidUpdate(ThemeConfig())
@@ -29,7 +31,7 @@ enum RankingCorpus {
         actions += await SettingsModule().provideActions(query: "", scoring: scoring)
         actions += await SystemModule().provideActions(query: "", scoring: scoring)
         actions += await GitHubModule().provideActions(query: "", scoring: scoring)
-        actions += applications + spotify + claude
+        actions += applications + spotify + claude(awaiting: awaiting)
         actions += calendar(now: now, pairingStartsIn: pairingStartsIn)
         return actions.map { ScorableAction(action: $0) }
     }
@@ -114,22 +116,25 @@ enum RankingCorpus {
     }
 
     /// `AIAction.forSession` for the most recent sessions, the alternate resume row
-    /// (`AnthropicProvider.alternateActions`), and the module's search action.
-    private static var claude: [any Action] {
+    /// (`AnthropicProvider.alternateActions`), and the module's search action. The
+    /// `awaiting` session gets the "waiting" keyword a waiting session carries.
+    private static func claude(awaiting: String?) -> [any Action] {
         let sessions: [(id: String, title: String, branch: String)] = [
             ("mind", "teach the picker to read my mind", "feat/mind-reading"),
             ("release", "fix the release workflow", "fix/release"),
             ("lint", "split long files for swiftlint", "fix/lint-file-length"),
         ]
         var rows: [any Action] = sessions.enumerated().map { index, session in
-            RankingRow(
-                id: "anthropic/session.\(session.id)", title: session.title,
+            let id = "anthropic/session.\(session.id)"
+            return RankingRow(
+                id: id, title: session.title,
                 subtitle: "Claude Code · ~/code/vibeshed · claude-opus-4-5 · \(index + 1) hr. ago",
                 relevanceScore: rankedScore(index: index),
                 keywords: [
                     "ai", "session", "chat", "claudecode", session.title, " users idmitriev code vibeshed",
                     session.branch,
-                ]
+                ] + (id == awaiting ? ["waiting"] : []),
+                isAwaitingUser: id == awaiting
             )
         }
         rows.append(RankingRow(
@@ -178,10 +183,12 @@ struct RankingRow: Action {
     let parameters: [ActionParameter]
     let scheduledStart: Date?
     let scheduledEnd: Date?
+    let isAwaitingUser: Bool
 
     init(
         id: String, title: String, subtitle: String, relevanceScore: Double, keywords: [String],
-        hasParameters: Bool = false, scheduledStart: Date? = nil, scheduledEnd: Date? = nil
+        hasParameters: Bool = false, scheduledStart: Date? = nil, scheduledEnd: Date? = nil,
+        isAwaitingUser: Bool = false
     ) {
         self.id = ActionID(id)
         self.title = title
@@ -193,6 +200,7 @@ struct RankingRow: Action {
             : []
         self.scheduledStart = scheduledStart
         self.scheduledEnd = scheduledEnd
+        self.isAwaitingUser = isAwaitingUser
     }
 
     func run(with _: ParameterValues) async throws -> ActionResult {

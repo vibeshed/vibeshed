@@ -16,6 +16,9 @@ struct ScorableAction: Sendable {
     /// The words a query must start, for actions that require a word-prefix match; nil
     /// for every other action.
     let prefixWords: [String]?
+    /// The words a typed query must start for the waiting-on-user boost, for actions
+    /// that are `isAwaitingUser`; nil for every other action.
+    let awaitingUserWords: [String]?
 
     init(action: any Action, extraKeywords: [String] = []) {
         self.action = action
@@ -25,6 +28,9 @@ struct ScorableAction: Sendable {
         self.scheduledEnd = action.scheduledEnd
         self.isFallback = action.isFallback
         self.prefixWords = action.requiresWordPrefixMatch
+            ? WordPrefixMatch.words(in: [action.title, action.subtitle] + combined)
+            : nil
+        self.awaitingUserWords = action.isAwaitingUser
             ? WordPrefixMatch.words(in: [action.title, action.subtitle] + combined)
             : nil
         self.target = FuzzyMatcher.ScoreTarget(
@@ -54,6 +60,13 @@ enum ActionScorer {
     /// to start (`ImminenceScorer`) still comes first.
     static let affinityWeight = 0.5
 
+    /// Lift for an action blocked on the user (`Action.isAwaitingUser`), given with
+    /// nothing typed or when every typed word starts one of its words. It tops the rest
+    /// of the empty list and any comparable match, while an event about to start
+    /// (`ImminenceScorer.maxBoost`) still comes first. A short or scattered match gets
+    /// none, so a waiting session doesn't take over queries meant for something else.
+    static let awaitingUserBoost = 0.75
+
     /// One action's score, split into its terms. `final` is what ranking sorts by.
     struct Evaluation {
         /// Fuzzy match incl. weighted relevance and usage (see `FuzzyMatcher.score`).
@@ -64,9 +77,10 @@ enum ActionScorer {
         let affinity: Double
         let context: Double
         let imminence: Double
+        let awaiting: Double
         let titleRanges: [Range<String.Index>]
 
-        var final: Double { fuzzy + affinity + context + imminence }
+        var final: Double { fuzzy + affinity + context + imminence + awaiting }
     }
 
     /// Scores one action; nil when it doesn't match the query at all.
@@ -106,8 +120,16 @@ enum ActionScorer {
             affinity: affinityWeight * (scoring.queryAffinity[action.id.rawValue] ?? 0),
             context: contextBoost,
             imminence: imminenceBoost,
+            awaiting: awaitingBoost(scorable, query: query),
             titleRanges: result.titleRanges
         )
+    }
+
+    /// `awaitingUserBoost` for an action waiting on the user, when the query names it.
+    static func awaitingBoost(_ scorable: ScorableAction, query: FuzzyMatcher.Query) -> Double {
+        guard let words = scorable.awaitingUserWords else { return 0 }
+        guard query.isEmpty || WordPrefixMatch.admits(queryLower: query.lowered, words: words) else { return 0 }
+        return awaitingUserBoost
     }
 
     /// Scores the precomputed corpus against `query`, ranks it, dedups browser tabs vs
