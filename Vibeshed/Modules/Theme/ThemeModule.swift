@@ -181,7 +181,10 @@ actor ThemeModule: ModuleConfigurable {
         await applier.preview(theme, config: config, options: options, isCurrent: theme.slug == current)
     }
 
-    func endParameterPreview(parameterID: String, actionID: ActionID, committed: Bool) async {
+    /// Nonisolated: Escape goes straight to the appliers instead of queueing behind this
+    /// actor's work for the list Escape returns to (rebuilding its actions held the
+    /// picker's revert back ~0.3 s).
+    nonisolated func endParameterPreview(parameterID: String, actionID: ActionID, committed: Bool) async {
         if actionID == Self.switchFontActionID {
             return await fontApplier.endPreview(committed: committed)
         }

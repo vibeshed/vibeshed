@@ -16,8 +16,6 @@ struct WallpaperTarget: ThemeTarget {
     }
 
     func apply(_ request: ThemeApplyRequest) async -> ThemeTargetOutcome {
-        // A preview superseded mid-run: the next one sets its own wallpaper.
-        if request.isPreview, Task.isCancelled { return .skipped("superseded") }
         let url: URL
         if let path = request.theme.wallpaper {
             url = URL(fileURLWithPath: path)

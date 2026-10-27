@@ -6,9 +6,11 @@ import OSLog
 /// arrowing quickly through ten themes applies only the one the highlight rests on, and
 /// a new highlight cancels the preview still in flight (a wallpaper still rendering).
 ///
-/// Each run goes picker first, then `prepare` (the slow part: rendering a wallpaper),
-/// then every target at once, so the desktop changes in one step instead of the apps
-/// first and the wallpaper a render later.
+/// The picker retints as soon as a preview is asked for. Then each run prepares (the
+/// slow part: rendering a wallpaper) and starts every target at once, so the desktop
+/// changes in one step instead of the apps first and the wallpaper a render later.
+/// Preview applies queue per target (`lanes`): iTerm's AppleScript, which can take
+/// seconds, holds up only iTerm, never the next theme's other targets.
 actor ThemeApplier {
     struct Result: Sendable {
         let target: String
@@ -22,14 +24,16 @@ actor ThemeApplier {
         TemplatesTarget(), HooksTarget(),
     ]
 
-    /// Where Vibeshed's own UI learns the theme on display: `ActiveTheme.shared`, except in tests.
+    /// Where Vibeshed's own UI learns the theme on display: `ActiveTheme.shared`, except in
+    /// tests. Main-actor calls made straight from this actor arrive in the order made, so
+    /// a preview's retint can't land after the Escape that cleared it.
     struct Display: Sendable {
-        var preview: @Sendable (ActiveThemeInfo?) async -> Void
-        var commit: @Sendable (ActiveThemeInfo) async -> Void
+        var preview: @MainActor @Sendable (ActiveThemeInfo?) -> Void
+        var commit: @MainActor @Sendable (ActiveThemeInfo) -> Void
 
         static let activeTheme = Display(
-            preview: { info in await MainActor.run { ActiveTheme.shared.preview(info) } },
-            commit: { info in await MainActor.run { ActiveTheme.shared.commit(info) } }
+            preview: { ActiveTheme.shared.preview($0) },
+            commit: { ActiveTheme.shared.commit($0) }
         )
     }
 
@@ -38,7 +42,11 @@ actor ThemeApplier {
     private let display: Display
     private var pipeline: Task<Void, Never>?
     /// The preview queued or running, cancelled when a newer one (or the end) arrives.
-    private var inFlightPreview: Task<Void, Never>?
+    private var inFlightPreview: Task<[LaneTask], Never>?
+    /// Each target's last queued preview apply.
+    private var lanes: [ThemeTargetID: Task<Void, Never>] = [:]
+
+    private typealias LaneTask = Task<(Result, Int)?, Never>
 
     /// State captured before the first preview of a `theme/switch` session.
     private struct PreviewSession {
@@ -73,6 +81,7 @@ actor ThemeApplier {
     func preview(_ theme: ResolvedTheme, config: ThemeConfig, options: Options, isCurrent: Bool) async {
         previewGeneration += 1
         let generation = previewGeneration
+        log.debug("Previewing \(theme.name, privacy: .public)")
         inFlightPreview?.cancel()
         let task = enqueue {
             await self.performPreview(
@@ -80,19 +89,25 @@ actor ThemeApplier {
             )
         }
         inFlightPreview = task
-        await task.value
+        // The picker follows the highlight now, whatever the targets are still busy with.
+        // (Queued first: an `endPreview` arriving meanwhile clears it after this.)
+        await showPreview(theme.activeInfo)
+        for lane in await task.value {
+            _ = await lane.value
+        }
     }
 
     /// Ends a preview session: reverts everything it changed unless `committed`. The
     /// picker goes back to the committed theme at once, ahead of the targets' restores.
     func endPreview(committed: Bool) async {
         previewGeneration += 1
+        log.debug("Ending the preview (\(committed ? "committed" : "reverting", privacy: .public))")
         inFlightPreview?.cancel()
         inFlightPreview = nil
         // Queued before the first suspension, so a preview that arrives meanwhile (a new
         // session) runs after this revert rather than being reverted by it.
         let finish = enqueue { await self.finishPreview(committed: committed) }
-        if !committed { await display.preview(nil) }
+        if !committed { await showPreview(nil) }
         await finish.value
     }
 
@@ -127,10 +142,12 @@ actor ThemeApplier {
     private func performApply(_ theme: ResolvedTheme, config: ThemeConfig, options: Options) async -> [Result] {
         // A committed preview already left its changes in place; nothing to restore.
         previewSession = nil
+        await drainLanes()
         let request = ThemeApplyRequest(theme: theme, config: config, isPreview: false, wallpaper: options.wallpaper)
         let targets = Self.enabledTargets(for: theme, config: config, only: options.only, from: allTargets)
         await prepare(request, targets)
-        await display.commit(theme.activeInfo)
+        let info = theme.activeInfo
+        await MainActor.run { [display] in display.commit(info) }
         // Hooks go last so they can rely on everything else (e.g. rendered templates).
         var results = await run(request, targets.filter { $0.id != .hooks })
         results += await run(request, targets.filter { $0.id == .hooks })
@@ -147,17 +164,15 @@ actor ThemeApplier {
         options: Options,
         isCurrent: Bool,
         generation: Int
-    ) async {
+    ) async -> [LaneTask] {
         // A newer highlight (or the end of the session) superseded this one.
-        guard generation == previewGeneration, !Task.isCancelled else { return }
+        guard generation == previewGeneration, !Task.isCancelled else { return [] }
         var session = previewSession ?? PreviewSession()
         // Resting on what's already applied changes nothing — don't touch anything yet.
         if !session.hasApplied, isCurrent {
             previewSession = session
-            return
+            return []
         }
-        // The picker first: it's where the user is looking, and it follows the highlight.
-        await display.preview(theme.activeInfo)
 
         let targets = Self.enabledTargets(for: theme, config: config, only: options.only, from: allTargets)
             .filter(\.supportsPreview)
@@ -168,9 +183,9 @@ actor ThemeApplier {
 
         let request = ThemeApplyRequest(theme: theme, config: config, isPreview: true, wallpaper: options.wallpaper)
         await prepare(request, targets)
-        guard generation == previewGeneration, !Task.isCancelled else { return }
+        guard generation == previewGeneration, !Task.isCancelled else { return [] }
         previewSession?.hasApplied = true
-        _ = await run(request, targets)
+        return enqueueInLanes(request, targets, generation: generation)
     }
 
     private func finishPreview(committed: Bool) async {
@@ -178,6 +193,8 @@ actor ThemeApplier {
         previewSession = nil
         guard !committed else { return }
         if session.hasApplied {
+            // A late apply still running would undo its target's restore.
+            await drainLanes()
             let start = ContinuousClock.now
             // Each restore puts back its own target's state, so they can run side by side.
             await withTaskGroup(of: Void.self) { group in
@@ -187,7 +204,11 @@ actor ThemeApplier {
             }
             log.debug("Reverted the preview in \(Self.milliseconds(since: start))ms")
         }
-        await display.preview(nil)
+        await showPreview(nil)
+    }
+
+    private func showPreview(_ info: ActiveThemeInfo?) async {
+        await MainActor.run { [display] in display.preview(info) }
     }
 
     // MARK: - Fan-out
@@ -222,6 +243,44 @@ actor ThemeApplier {
         let kind = request.isPreview ? "Previewed" : "Applied"
         log.debug("\(kind, privacy: .public) \(request.theme.name, privacy: .public): \(line, privacy: .public)")
         return timed.map(\.0)
+    }
+
+    /// Queues each target's apply behind its own previous one; one superseded by the time
+    /// its turn comes is skipped. Returns without waiting for them.
+    private func enqueueInLanes(_ request: ThemeApplyRequest, _ targets: [any ThemeTarget], generation: Int)
+        -> [LaneTask]
+    {
+        let start = ContinuousClock.now
+        let tasks = targets.map { target in
+            let previous = lanes[target.id]
+            let task = LaneTask {
+                await previous?.value
+                guard self.previewGeneration == generation else { return nil }
+                let outcome = await target.apply(request)
+                return (Result(target: target.displayName, outcome: outcome), Self.milliseconds(since: start))
+            }
+            lanes[target.id] = Task { _ = await task.value }
+            return task
+        }
+        Task { [log] in
+            var timed: [(Result, Int)] = []
+            for task in tasks {
+                if let result = await task.value { timed.append(result) }
+            }
+            guard !timed.isEmpty else { return }
+            let line = timed.sorted { $0.1 > $1.1 }.map { "\($0.0.target) \($0.1)ms" }.joined(separator: ", ")
+            log.debug("Previewed \(request.theme.name, privacy: .public): \(line, privacy: .public)")
+        }
+        return tasks
+    }
+
+    /// Waits for every queued preview apply. Only pipeline steps call it, so no new ones
+    /// are queued meanwhile.
+    private func drainLanes() async {
+        for lane in lanes.values {
+            await lane.value
+        }
+        lanes = [:]
     }
 
     private func snapshots(_ targets: [any ThemeTarget], config: ThemeConfig) async -> [ThemeRestore] {
