@@ -70,9 +70,9 @@ struct ITermTarget: ThemeTarget {
     // MARK: - Scripts
 
     // Each Apple event iTerm answers costs ~17–20 ms, however small, so the scripts address
-    // every session at once — an event per property, not per property per session (that
-    // took 4–10 s per preview) — and the sets don't wait for replies: iTerm works through
-    // queued events together, so 23 sets land in ~0.1 s instead of ~0.5 s.
+    // every session at once — an event per property, not per property per session — and the
+    // sets don't wait for replies. What's left is iTerm's own work per changed color (it
+    // reloads the session's profile, ~30–40 ms): 0.7–1 s for a theme change on two sessions.
 
     private static let allSessions = "every session of every tab of every window"
 
