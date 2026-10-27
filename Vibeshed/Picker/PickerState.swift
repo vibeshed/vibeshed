@@ -62,8 +62,15 @@ final class PickerState {
     }
 
     var parameterQuery: String = "" {
-        didSet { parameterQuerySubject.send(parameterQuery) }
+        didSet {
+            parameterQuerySubject.send(parameterQuery)
+            if parameterQuery != oldValue { onParameterQueryEdit?() }
+        }
     }
+
+    /// Fired on every change to the parameter field's text, ahead of the debounced
+    /// filter: a live preview holds off while the highlight follows the typing.
+    @ObservationIgnored var onParameterQueryEdit: (@MainActor () -> Void)?
 
     // MARK: - Action cache (not tracked by @Observable for perf)
 

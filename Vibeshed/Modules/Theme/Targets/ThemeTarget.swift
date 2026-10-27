@@ -47,6 +47,11 @@ protocol ThemeTarget: Sendable {
     /// `theme/switch`. Such targets must implement `snapshot`.
     var supportsPreview: Bool { get }
 
+    /// The slow, invisible part of `apply` (rendering a wallpaper), run for every target
+    /// before any `apply` so the targets change together. Must leave what `apply` needs
+    /// cached; a cancelled preview may skip it.
+    func prepare(_ request: ThemeApplyRequest) async
+
     func apply(_ request: ThemeApplyRequest) async -> ThemeTargetOutcome
 
     /// Captures the state `apply` is about to change, for reverting a cancelled preview.
@@ -55,6 +60,8 @@ protocol ThemeTarget: Sendable {
 
 extension ThemeTarget {
     var supportsPreview: Bool { false }
+
+    func prepare(_: ThemeApplyRequest) async {}
 
     func snapshot(config _: ThemeConfig) async -> ThemeRestore? { nil }
 }

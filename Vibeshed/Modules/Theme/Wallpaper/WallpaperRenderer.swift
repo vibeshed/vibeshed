@@ -25,6 +25,8 @@ enum WallpaperRenderer {
         ].joined(separator: "-")
         let url = directory.appendingPathComponent("\(name).jpg")
         if FileManager.default.fileExists(atPath: url.path) { return url }
+        // A superseded preview: the drawing itself can't be interrupted, so don't start it.
+        guard !Task.isCancelled else { return nil }
 
         guard let image = draw(theme.palette, size: size, choice: choice) else { return nil }
         do {
