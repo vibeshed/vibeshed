@@ -279,6 +279,7 @@ final class PanelController {
         newPanel.setSwiftUIContent(
             ThemedPickerWrapper(state: pickerState, panelController: self, appearance: appearance)
         )
+        newPanel.followPaletteAppearance()
 
         windowCloseObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,

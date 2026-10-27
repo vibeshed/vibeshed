@@ -9,6 +9,12 @@ struct WallpaperTarget: ThemeTarget {
     let displayName = "Wallpaper"
     var supportsPreview: Bool { true }
 
+    /// Renders (into the cache `apply` reads) ahead of the other targets.
+    func prepare(_ request: ThemeApplyRequest) async {
+        guard request.theme.wallpaper == nil, request.config.generateWallpapers else { return }
+        _ = await WallpaperRenderer.render(request.theme, choice: request.wallpaper)
+    }
+
     func apply(_ request: ThemeApplyRequest) async -> ThemeTargetOutcome {
         let url: URL
         if let path = request.theme.wallpaper {

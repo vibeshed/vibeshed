@@ -47,7 +47,7 @@ final class PickerCoordinator {
     // MARK: - Live parameter preview (see PickerCoordinator+LivePreview)
 
     @ObservationIgnored var livePreview: LivePreviewSession?
-    @ObservationIgnored var livePreviewTask: Task<Void, Never>?
+    @ObservationIgnored let livePreviewScheduler = LivePreviewScheduler()
     /// The action picked from the search list and what was typed to find it, for the
     /// usage tracker's query history once its parameters are filled in.
     @ObservationIgnored private var pick: (actionID: ActionID, query: String)?
@@ -87,6 +87,7 @@ final class PickerCoordinator {
         wireParameterQuery()
         wireActionRefresh()
         pickerState.onLivePreviewContextChange = { [weak self] in self?.syncLivePreview() }
+        pickerState.onParameterQueryEdit = { [weak self] in self?.livePreviewScheduler.filterEdited() }
     }
 
     // MARK: - Keyboard handlers
