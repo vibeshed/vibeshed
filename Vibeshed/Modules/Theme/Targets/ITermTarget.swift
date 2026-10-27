@@ -56,35 +56,108 @@ struct ITermTarget: ThemeTarget {
             ITermProfiles.setVibeshedDefault(request.config.itermDefaultProfile)
         }
         guard ThemeApps.isRunning(Self.bundleID) else { return .applied() }
-        let assignments = Self.colors(request.palette).map { "set \($0.property) to \($0.color.appleScriptList)" }
-        return await Self.run(Self.forEachSession(assignments.joined(separator: "\n")))
+        return await Self.run(Self.applyScript(request.palette))
     }
 
     func snapshot(config _: ThemeConfig) async -> ThemeRestore? {
-        guard ThemeApps.isRunning(Self.bundleID) else { return nil }
-        let properties = Self.colors(ThemePalette.placeholder).map(\.property)
-        let reads = properties.map { "set out to out & \"|\" & (\($0) as string)" }.joined(separator: "\n")
-        let script = Self.forEachSession("""
-        set out to out & (id as string)
-        \(reads)
-        set out to out & linefeed
-        """, prelude: "set out to \"\"\nset AppleScript's text item delimiters to \", \"", result: "return out")
-        guard let output = try? await AppleScriptRunner.run(script) else { return nil }
-
-        // One line per session: id|r, g, b|r, g, b|…
-        var blocks: [String] = []
-        for line in output.split(whereSeparator: \.isNewline) {
-            let fields = line.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
-            guard fields.count == properties.count + 1 else { continue }
-            let sets = zip(properties, fields.dropFirst()).map { "set \($0) to {\($1)}" }.joined(separator: "\n")
-            blocks.append("if id of s is \"\(fields[0])\" then\ntell s\n\(sets)\nend tell\nend if")
-        }
-        guard !blocks.isEmpty else { return nil }
-        let restore = Self.forEachSession(blocks.joined(separator: "\n"), tellSession: false)
+        guard ThemeApps.isRunning(Self.bundleID),
+              let output = try? await AppleScriptRunner.run(Self.snapshotScript),
+              let restore = Self.restoreScript(snapshot: output)
+        else { return nil }
         return { _ = try? await AppleScriptRunner.run(restore) }
     }
 
     // MARK: - Scripts
+
+    // Each Apple event iTerm answers costs ~17–20 ms, however small, so the scripts address
+    // every session at once — an event per property, not per property per session (that
+    // took 4–10 s per preview) — and the sets don't wait for replies: iTerm works through
+    // queued events together, so 23 sets land in ~0.1 s instead of ~0.5 s.
+
+    private static let allSessions = "every session of every tab of every window"
+
+    private static var properties: [String] {
+        colors(ThemePalette.placeholder).map(\.property)
+    }
+
+    static func applyScript(_ palette: ThemePalette) -> String {
+        tell(colors(palette).map { "set \($0.property) of \(allSessions) to \($0.color.appleScriptList)" })
+    }
+
+    private static func presetScript(_ preset: String) -> String {
+        tell(["set color preset of \(allSessions) to \"\(preset.escapedForAppleScript)\""])
+    }
+
+    /// One line per session: `id|r, g, b|r, g, b|…`, in `properties` order. The reads
+    /// come back nested by window and tab.
+    static var snapshotScript: String {
+        let reads = properties.map { "\($0) of \(allSessions)" }.joined(separator: ", ")
+        return """
+        set AppleScript's text item delimiters to ", "
+        tell application id "\(bundleID)"
+            set ids to id of \(allSessions)
+            set values to {\(reads)}
+        end tell
+        set out to ""
+        repeat with w from 1 to count ids
+            repeat with t from 1 to count item w of ids
+                repeat with s from 1 to count item t of item w of ids
+                    set out to out & item s of item t of item w of ids
+                    repeat with v in values
+                        set out to out & "|" & (item s of item t of item w of v as string)
+                    end repeat
+                    set out to out & linefeed
+                end repeat
+            end repeat
+        end repeat
+        return out
+        """
+    }
+
+    /// Puts back what `snapshotScript` read: one event per distinct value of each property
+    /// (just one when every session shared it), aimed at the sessions that had it by id.
+    /// Sessions closed since are skipped; ones opened since are left alone.
+    static func restoreScript(snapshot output: String) -> String? {
+        let properties = properties
+        var sessions: [(id: String, values: [String])] = []
+        for line in output.split(whereSeparator: \.isNewline) {
+            let fields = line.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+            guard fields.count == properties.count + 1 else { continue }
+            sessions.append((fields[0], Array(fields.dropFirst())))
+        }
+        guard !sessions.isEmpty else { return nil }
+
+        var sets: [String] = []
+        for (index, property) in properties.enumerated() {
+            var values: [String] = []
+            var ids: [String: [String]] = [:]
+            for session in sessions {
+                let value = session.values[index]
+                if ids[value] == nil { values.append(value) }
+                ids[value, default: []].append(session.id)
+            }
+            for value in values {
+                let filter = (ids[value] ?? []).map { "id is \"\($0.escapedForAppleScript)\"" }
+                    .joined(separator: " or ")
+                sets.append("set \(property) of (\(allSessions) whose \(filter)) to {\(value)}")
+            }
+        }
+        return tell(sets)
+    }
+
+    /// Sends `statements` without waiting for each reply, then one query that iTerm answers
+    /// only once it has handled them, so the script ends when the colors have landed. (A
+    /// set iTerm rejects goes unreported; sending fails as before, e.g. without permission.)
+    private static func tell(_ statements: [String]) -> String {
+        """
+        tell application id "\(bundleID)"
+        ignoring application responses
+        \(statements.joined(separator: "\n"))
+        end ignoring
+        count windows
+        end tell
+        """
+    }
 
     private static func run(_ script: String) async -> ThemeTargetOutcome {
         do {
@@ -93,32 +166,6 @@ struct ITermTarget: ThemeTarget {
         } catch {
             return .failed(error.localizedDescription)
         }
-    }
-
-    private static func forEachSession(
-        _ body: String,
-        tellSession: Bool = true,
-        prelude: String = "",
-        result: String = ""
-    ) -> String {
-        let inner = tellSession ? "tell s\n\(body)\nend tell" : body
-        return """
-        \(prelude)
-        tell application id "\(bundleID)"
-            repeat with w in windows
-                repeat with t in tabs of w
-                    repeat with s in sessions of t
-                        \(inner)
-                    end repeat
-                end repeat
-            end repeat
-        end tell
-        \(result)
-        """
-    }
-
-    private static func presetScript(_ preset: String) -> String {
-        forEachSession("set color preset to \"\(preset.escapedForAppleScript)\"")
     }
 
     // MARK: - Dynamic Profile
