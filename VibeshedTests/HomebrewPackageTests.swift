@@ -33,19 +33,24 @@ final class HomebrewPackageTests: XCTestCase {
         XCTAssertTrue(package.autoUpdates)
         XCTAssertEqual(package.conflicts, ["firefox@beta", "firefox@esr"])
         XCTAssertEqual(package.appPaths, ["/Applications/Firefox.app"])
+        XCTAssertEqual(package.fontPaths, [])
         XCTAssertNil(package.caveats)
         XCTAssertNil(package.deprecation)
         XCTAssertNil(package.disabling)
     }
 
-    func testCaskWithoutAppHasNoAppPaths() {
+    func testFontCaskHasFontPathsAndNoAppPaths() {
         let json = """
         {"casks": [{"token": "font-fira-code", "artifacts": [
-          {"font": ["ttf/FiraCode-Bold.ttf"], "target": "/Users/me/Library/Fonts/FiraCode-Bold.ttf"}
+          {"font": ["ttf/FiraCode-Bold.ttf"], "target": "/Users/me/Library/Fonts/FiraCode-Bold.ttf"},
+          {"font": ["ttf/FiraCode-Light.ttf"], "target": "/Users/me/Library/Fonts/FiraCode-Light.ttf"}
         ]}]}
         """
         let packages = HomebrewPackage.parse(Data(json.utf8))
         XCTAssertEqual(packages.map(\.appPaths), [[]])
+        XCTAssertEqual(packages.first?.fontPaths, [
+            "/Users/me/Library/Fonts/FiraCode-Bold.ttf", "/Users/me/Library/Fonts/FiraCode-Light.ttf",
+        ])
         XCTAssertEqual(packages.first?.displayName, "font-fira-code")
         XCTAssertEqual(packages.first?.isInstalled, false)
     }
