@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
-# Cut a new release: tag, push, wait for the GitHub Actions release workflow,
-# then print the cask update snippet (sha256 + version).
+# Cut a release from origin/main: tag it, wait for the Release workflow (which
+# publishes the GitHub Release and updates the website, cask template and
+# project.yml on main), then copy the cask to the Homebrew tap.
+#
+# Safe to rerun with the same version: it picks up wherever the last run stopped.
 #
 # Usage: scripts/cut-release.sh 0.2.0
 
 set -euo pipefail
+
+REPO="vibeshed/vibeshed"
+TAP="idmitriev/homebrew-tap"
 
 VERSION="${1:-}"
 if [[ -z "$VERSION" ]]; then
@@ -19,25 +25,65 @@ fi
 
 TAG="v${VERSION}"
 
-if [[ -n "$(git status --porcelain)" ]]; then
-  echo "Working tree dirty — commit or stash first." >&2
+git fetch --quiet origin main
+git fetch --quiet --tags origin
+
+if git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null; then
+  echo "Tag $TAG already exists, resuming."
+else
+  CI_RUN=$(gh run list --repo "$REPO" --workflow CI --branch main --limit 1 --json databaseId --jq '.[0].databaseId')
+  echo "Checking CI on main..."
+  if ! gh run watch "$CI_RUN" --repo "$REPO" --exit-status >/dev/null; then
+    echo "CI on main is red: https://github.com/$REPO/actions/runs/$CI_RUN" >&2
+    exit 1
+  fi
+
+  echo "Tagging $TAG at $(git rev-parse --short origin/main)..."
+  git tag -a "$TAG" -m "Release $TAG" origin/main
+  git push --quiet origin "refs/tags/$TAG"
+fi
+
+RUN=""
+for _ in {1..30}; do
+  RUN=$(gh run list --repo "$REPO" --workflow Release --branch "$TAG" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+  [[ -n "$RUN" ]] && break
+  sleep 2
+done
+if [[ -z "$RUN" ]]; then
+  echo "No Release run appeared for $TAG." >&2
   exit 1
 fi
 
-if git rev-parse "$TAG" >/dev/null 2>&1; then
-  echo "Tag $TAG already exists." >&2
+echo "Waiting for the Release workflow: https://github.com/$REPO/actions/runs/$RUN"
+if ! gh run watch "$RUN" --repo "$REPO" --exit-status >/dev/null; then
+  echo "Release workflow failed. Fix it, then:" >&2
+  echo "  gh run rerun $RUN --repo $REPO --failed" >&2
+  echo "  $0 $VERSION" >&2
   exit 1
 fi
 
-echo "Tagging $TAG..."
-git tag -a "$TAG" -m "Release $TAG"
-git push origin "$TAG"
+if [[ "$VERSION" == *-* ]]; then
+  echo "Prerelease $TAG published. The website and Homebrew stay on the last stable release."
+  exit 0
+fi
 
-echo
-echo "Tag pushed. The 'Release' workflow on GitHub Actions will build, sign,"
-echo "notarize, and publish the GitHub Release."
-echo
-echo "Once the release is live, update the Homebrew cask:"
-echo "  1. Download Vibeshed-${VERSION}.zip from the release"
-echo "  2. sha256: shasum -a 256 Vibeshed-${VERSION}.zip"
-echo "  3. Update scripts/Casks/vibeshed.rb (version + sha256) and PR it to your homebrew tap"
+CASK=$(gh api -H "Accept: application/vnd.github.raw" "repos/$REPO/contents/scripts/Casks/vibeshed.rb")
+DIGEST=$(gh api "repos/$REPO/releases/tags/$TAG" --jq ".assets[] | select(.name == \"Vibeshed-$VERSION.zip\") | .digest")
+if ! grep -q "version \"$VERSION\"" <<<"$CASK" || ! grep -q "sha256 \"${DIGEST#sha256:}\"" <<<"$CASK"; then
+  echo "Cask on main doesn't match $TAG (asset digest: $DIGEST). Not touching the tap." >&2
+  exit 1
+fi
+
+CASK_BLOB=$(gh api "repos/$REPO/contents/scripts/Casks/vibeshed.rb" --jq .sha)
+TAP_BLOB=$(gh api "repos/$TAP/contents/Casks/vibeshed.rb" --jq .sha)
+if [[ "$CASK_BLOB" == "$TAP_BLOB" ]]; then
+  echo "Homebrew tap already at $VERSION."
+else
+  gh api --silent -X PUT "repos/$TAP/contents/Casks/vibeshed.rb" \
+    -f message="vibeshed $VERSION" \
+    -f content="$(base64 <<<"$CASK" | tr -d '\n')" \
+    -f sha="$TAP_BLOB"
+  echo "Homebrew tap updated."
+fi
+
+echo "Released: https://github.com/$REPO/releases/tag/$TAG"

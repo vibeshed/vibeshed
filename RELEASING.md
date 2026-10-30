@@ -43,7 +43,7 @@ Add these under **Settings → Secrets and variables → Actions**:
 
 ### 4. Homebrew tap (optional but recommended)
 
-Create a repo named `homebrew-tap` (literal prefix `homebrew-`) under your GitHub account. The cask template lives at [`scripts/Casks/vibeshed.rb`](scripts/Casks/vibeshed.rb) in this repo — copy it into `Casks/vibeshed.rb` in the tap repo on each release, updating `version` and `sha256`.
+Create a repo named `homebrew-tap` (literal prefix `homebrew-`) under your GitHub account, with a `Casks/vibeshed.rb` copied from the template at [`scripts/Casks/vibeshed.rb`](scripts/Casks/vibeshed.rb). `scripts/cut-release.sh` keeps it up to date.
 
 Users then install with `brew install --cask idmitriev/tap/vibeshed`.
 
@@ -53,23 +53,22 @@ Users then install with `brew install --cask idmitriev/tap/vibeshed`.
 scripts/cut-release.sh 0.2.0
 ```
 
-This tags `v0.2.0` and pushes it. The Release workflow takes ~5–10 min: build → codesign → notarize → staple → upload to a fresh GitHub Release.
+Needs an authenticated `gh` with write access to this repo and the tap, and nothing else: it works from any checkout, whatever state the working tree is in.
 
-Then update the Homebrew tap:
+1. Waits for CI on `main` and stops if it's red.
+2. Tags `origin/main` as `v0.2.0` and pushes the tag.
+3. Waits for the Release workflow (~6 min): build → codesign → notarize → staple → GitHub Release → one commit on `main` updating the website, the cask template and `project.yml`.
+4. Checks the cask's `sha256` against the release asset's digest and commits the cask to the tap's `main`.
 
-```sh
-shasum -a 256 Vibeshed-0.2.0.zip   # download from the release first
-```
-
-PR the new `sha256` and `version` into `homebrew-tap/Casks/vibeshed.rb`.
+If anything fails, fix it and rerun the same command. It resumes from where it stopped, and prints the `gh run rerun` command when the workflow is what failed. A rerun reads the current repository secrets, so a bad secret doesn't need a new tag.
 
 ## Versioning
 
-Semver. The Makefile derives the version from the latest `git describe --tags`, so tagged builds embed the right version into `Info.plist` without a manual bump.
+Semver. Nothing needs a version bump before tagging: tagged builds take the version from the tag, and the workflow updates `project.yml` afterwards.
 
 ## Pre-release builds
 
-Tags containing `-` (e.g. `v0.2.0-rc1`) are uploaded as **prereleases** automatically.
+Tags containing `-` (e.g. `v0.2.0-rc1`) are uploaded as **prereleases** automatically. The website and Homebrew stay on the last stable release.
 
 ## Manual / local release builds
 
