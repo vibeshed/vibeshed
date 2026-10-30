@@ -6,6 +6,10 @@
 
 A keyboard-driven macOS launcher built with SwiftUI. Control your Mac with keystrokes — manage windows, switch apps, search browser tabs, control Spotify, and more from a single floating picker.
 
+<p align="center">
+  <img src="docs/img/readme-hero.gif" alt="Vibeshed's picker finds the Spotify track that's playing and a Claude Code session, previews four themes that repaint Zed, btop and the wallpaper live, then maximizes and restores a window from the keyboard" width="960">
+</p>
+
 ## Goals
 
 - **Keyboard-first.** Every action reachable in a few keystrokes; mouse optional.

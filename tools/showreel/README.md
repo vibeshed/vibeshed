@@ -293,6 +293,17 @@ shoots VS Code, Ghostty and the picker's theme list in six themes.
 `site-stills.sh` converts them to sRGB, writes WebP beside each PNG or JPEG,
 and lays the six screens out as a 3×2 montage in `out/site-stills/`.
 
+## README GIF
+
+`scenes/readme-hero.yaml` is the GIF at the top of the repo's README: search,
+four themes and a maximized window in one ~30 s loop on the same base VM, at
+1280×800 so the picker stays readable at 960 px, with the keystroke visualizer
+on. Copy `out/readme-hero/readme.gif` to `docs/img/readme-hero.gif`.
+
+```bash
+scripts/showreel record readme-hero
+```
+
 ## Gotchas
 
 - The VM must be logged in to its desktop: the agent needs the GUI session.
