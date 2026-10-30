@@ -174,9 +174,11 @@ Modules load only when their config section is present. A section added while Vi
 
 One palette, applied everywhere at once. `theme/switch` lists the themes; moving the highlight applies each one live, Return keeps it, Esc puts everything back. Every theme is also a direct action (`theme/apply.tokyo-night`) you can bind or alias, plus `theme/next`, `theme/previous`, `theme/reapply` and `theme/fromWallpaper`, which derives a full palette from your current wallpaper.
 
+Themes that come as a light/dark pair (Catppuccin Latte and Mocha, Tokyo Night Day and Tokyo Night, `pair:` in config) follow the system: when macOS switches appearance, Vibeshed applies the other half, also on launch if it switched while Vibeshed wasn't running. A family's dark variants share one light theme, and switching back returns to the variant you were on. A theme with no pair is specifically light or dark, so applying it turns off Auto appearance; applying a paired theme turns Auto back on if a theme turned it off.
+
 | Target | What changes | Live? |
 |--------|--------------|-------|
-| `appearance` | Light/dark mode | ✓ |
+| `appearance` | Light/dark mode, and Auto appearance as above | ✓ |
 | `accent` | Accent (nearest preset) + text highlight (exact color) | ✓ |
 | `folders` | "Icon, widget & folder color" (macOS 26+), tinted icons for listed folders | ✓ |
 | `pointer` | Pointer fill/outline (needs Full Disk Access) | best-effort |

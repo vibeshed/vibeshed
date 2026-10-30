@@ -540,9 +540,13 @@ modules:
     # Your own palettes. Keys follow Omarchy's colors.toml; only background, foreground
     # and red/green/yellow/blue/magenta/cyan are required — the rest is derived.
     # A theme named like a built-in replaces it; `base:` inherits and overrides.
+    # `pair:` names the opposite-mode theme to switch to when the system's appearance does.
+    # A theme without a pair is specifically light or dark: applying it turns off Auto
+    # appearance, and applying a paired theme later turns Auto back on.
     # themes:
     #   - name: "Midnight"
     #     base: "Tokyo Night"
+    #     pair: "Tokyo Night Day"
     #     colors:
     #       background: "#0b0b12"
     #       accent: "#ff9e64"

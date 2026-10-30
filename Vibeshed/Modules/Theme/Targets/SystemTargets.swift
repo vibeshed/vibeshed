@@ -8,20 +8,59 @@ struct AppearanceTarget: ThemeTarget {
     let displayName = "Appearance"
     var supportsPreview: Bool { true }
 
+    /// Set while Auto is off because a single-mode theme turned it off.
+    private static let turnedAutoOffKey = "theme.appearance.turnedAutoOff"
+    /// How long Auto takes to move the system to the schedule's mode once it's on.
+    private static let autoSettleTime = Duration.seconds(1.5)
+
+    enum AutoChange: Equatable {
+        case none
+        /// A single-mode theme: the schedule would leave it in the wrong mode.
+        case turnOff
+        /// A paired theme can follow the schedule again, after a single-mode one turned it off.
+        case restore
+    }
+
+    /// A previous setting only comes back if Vibeshed took it away, so someone who keeps
+    /// Auto off doesn't get it turned on by choosing a paired theme.
+    static func autoChange(themeIsPaired: Bool, autoIsOn: Bool, turnedAutoOff: Bool) -> AutoChange {
+        if themeIsPaired { return turnedAutoOff && !autoIsOn ? .restore : .none }
+        return autoIsOn ? .turnOff : .none
+    }
+
     func apply(_ request: ThemeApplyRequest) async -> ThemeTargetOutcome {
+        // Only a theme that's kept decides this; previews just flip the mode and flip it back.
+        if !request.isPreview {
+            await Self.updateAutoSwitching(themeIsPaired: !request.theme.counterparts.isEmpty)
+        }
         let wantsDark = request.palette.mode == .dark
-        if await Self.isDark() == wantsDark { return .applied() }
+        if await SystemAppearance.isDark == wantsDark { return .applied() }
         return await Self.setDark(wantsDark)
     }
 
     func snapshot(config _: ThemeConfig) async -> ThemeRestore? {
-        let wasDark = await Self.isDark()
+        let wasDark = await SystemAppearance.isDark
         return { _ = await Self.setDark(wasDark) }
     }
 
-    @MainActor
-    private static func isDark() -> Bool {
-        NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+    private static func updateAutoSwitching(themeIsPaired: Bool) async {
+        let defaults = UserDefaults.standard
+        let change = autoChange(
+            themeIsPaired: themeIsPaired,
+            autoIsOn: SystemAppearance.switchesAutomatically,
+            turnedAutoOff: defaults.bool(forKey: turnedAutoOffKey)
+        )
+        if themeIsPaired { defaults.removeObject(forKey: turnedAutoOffKey) }
+        switch change {
+        case .none:
+            break
+        case .turnOff:
+            if SystemAppearance.setSwitchesAutomatically(false) { defaults.set(true, forKey: turnedAutoOffKey) }
+        case .restore:
+            SystemAppearance.setSwitchesAutomatically(true)
+            // Let it finish moving, so the theme's mode is set after that instead of undone by it.
+            try? await Task.sleep(for: autoSettleTime)
+        }
     }
 
     private static func setDark(_ dark: Bool) async -> ThemeTargetOutcome {
