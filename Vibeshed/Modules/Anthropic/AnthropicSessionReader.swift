@@ -5,11 +5,12 @@ private let log = Log.module("anthropic")
 
 /// Reads Claude session history from disk: the Claude Code CLI's `history.jsonl` and
 /// Claude Desktop's per-session metadata files, plus the model and branch from each
-/// listed session's transcript.
+/// listed session's transcript and whether a running session is waiting on the user.
 enum AnthropicSessionReader {
     /// Where the CLI and the desktop app keep session state.
     struct Locations {
-        /// `~/.claude`: `history.jsonl` and the `projects/` transcripts.
+        /// `~/.claude`: `history.jsonl`, the `projects/` transcripts and the
+        /// `sessions/` records of running processes.
         var claudeDirectory: URL
         /// Claude Desktop's per-session metadata.
         var desktopSessionsDirectory: URL
@@ -37,11 +38,15 @@ enum AnthropicSessionReader {
         // it carries human-written titles for sessions the CLI only knows by prompt.
         let desktopMeta = (wantsDesktop || wantsCode)
             ? readDesktopMetadata(base: locations.desktopSessionsDirectory) : []
+        let waiting = AnthropicLiveSessions.waiting(
+            in: locations.claudeDirectory.appendingPathComponent("sessions")
+        )
 
         var sessions: [AISession] = []
         if wantsCode {
             sessions += readClaudeCodeSessions(
                 titles: titleLookup(desktopMeta),
+                waiting: waiting,
                 limit: limit,
                 claudeDirectory: locations.claudeDirectory
             )
@@ -50,10 +55,12 @@ enum AnthropicSessionReader {
             // A desktop session that mirrors a CLI session we already listed would be
             // a duplicate row for the same conversation.
             let seen = Set(sessions.map(\.sessionID))
-            sessions += desktopSessions(from: desktopMeta, excludingCLIIDs: seen)
+            sessions += desktopSessions(
+                from: desktopMeta, waiting: waiting, excludingCLIIDs: seen
+            )
         }
 
-        sessions.sort { $0.timestamp > $1.timestamp }
+        sessions.sort(by: ranksBefore)
         log.debug("Anthropic sessions found: \(sessions.count, privacy: .public)")
         // Desktop sessions run on the CLI too, so both kinds have a transcript.
         return AnthropicTranscripts.enrich(
@@ -63,10 +70,20 @@ enum AnthropicSessionReader {
         )
     }
 
+    /// Sessions waiting on the user first, then newest first, so the cap never drops
+    /// one that is waiting.
+    private static func ranksBefore(_ lhs: AISession, _ rhs: AISession) -> Bool {
+        if (lhs.waitingFor == nil) != (rhs.waitingFor == nil) {
+            return lhs.waitingFor != nil
+        }
+        return lhs.timestamp > rhs.timestamp
+    }
+
     // MARK: - Claude Code CLI
 
     private static func readClaudeCodeSessions(
         titles: [String: String],
+        waiting: [String: String],
         limit: Int,
         claudeDirectory: URL
     ) -> [AISession] {
@@ -91,10 +108,11 @@ enum AnthropicSessionReader {
                         ?? cliTitle(first.display, sessionID: sessionID),
                     lastPrompt: last.display.asSessionTitle(limit: 500),
                     project: first.project,
-                    timestamp: Date(timeIntervalSince1970: last.timestamp / 1000)
+                    timestamp: Date(timeIntervalSince1970: last.timestamp / 1000),
+                    waitingFor: waiting[sessionID]
                 )
             }
-            .sorted { $0.timestamp > $1.timestamp }
+            .sorted(by: ranksBefore)
         return Array(sessions.prefix(limit))
     }
 
@@ -111,6 +129,7 @@ enum AnthropicSessionReader {
 
     private static func desktopSessions(
         from metas: [DesktopMeta],
+        waiting: [String: String],
         excludingCLIIDs excluded: Set<String>
     ) -> [AISession] {
         metas.compactMap { meta in
@@ -126,7 +145,9 @@ enum AnthropicSessionReader {
                 project: meta.cwd,
                 model: meta.model.map(AnthropicModelName.displayName(for:)),
                 branch: meta.branch,
-                timestamp: Date(timeIntervalSince1970: meta.lastActivityAt / 1000)
+                timestamp: Date(timeIntervalSince1970: meta.lastActivityAt / 1000),
+                waitingFor: waiting[meta.sessionID]
+                    ?? meta.cliSessionID.flatMap { waiting[$0] }
             )
         }
     }

@@ -52,7 +52,29 @@ struct AnthropicProvider: AIProvider {
         )
     }
 
+    /// A session that is still running is taken back to where it runs: its Claude
+    /// Desktop tab or its terminal tab. Resuming it would start a second process on
+    /// the same conversation.
     func openSession(_ session: AISession, config: AnthropicConfig) {
+        guard let live = (session.cliSessionID ?? cliID(of: session))
+            .flatMap({ AnthropicLiveSessions.running($0) })
+        else {
+            reopen(session, config: config)
+            return
+        }
+        if let host = live.hostSessionID,
+           AnthropicDeeplink.isDesktopSessionID(host),
+           let url = AnthropicDeeplink.continueCodeSession(host)
+        {
+            AILaunch.openURL(url)
+            return
+        }
+        AITerminalFocus.focus(pid: live.pid) {
+            reopen(session, config: config)
+        }
+    }
+
+    private func reopen(_ session: AISession, config: AnthropicConfig) {
         switch session.source.id {
         case Self.claudeDesktop.id:
             openInDesktop(session)

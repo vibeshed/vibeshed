@@ -26,6 +26,11 @@ struct AIActionListItemView: View {
             Spacer()
 
             HStack(spacing: 4) {
+                if action.isAwaitingUser {
+                    Text("WAITING")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.orange)
+                }
                 if let source = action.source {
                     Text(source.shortLabel)
                         .font(.subheadline)
@@ -64,6 +69,14 @@ struct AIActionPreviewView: View {
                     text: source.fullLabel,
                     icon: source.iconName,
                     color: accentColor
+                )
+            }
+
+            if let waitingFor = action.waitingFor {
+                PreviewPill(
+                    text: "Waiting for you: \(waitingFor)",
+                    icon: "bell.badge",
+                    color: .orange
                 )
             }
 

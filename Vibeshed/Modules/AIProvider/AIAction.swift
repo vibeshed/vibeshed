@@ -21,6 +21,12 @@ struct AIAction: Action {
     let modelName: String?
     let branch: String?
     let sessionTimestamp: Date?
+    /// What the session is blocked on until the user answers (see `AISession.waitingFor`).
+    let waitingFor: String?
+
+    var isAwaitingUser: Bool {
+        waitingFor != nil
+    }
 
     private let runner: @Sendable (
         ParameterValues
@@ -41,6 +47,7 @@ struct AIAction: Action {
         modelName: String? = nil,
         branch: String? = nil,
         sessionTimestamp: Date? = nil,
+        waitingFor: String? = nil,
         runner: @escaping @Sendable (
             ParameterValues
         ) async throws -> ActionResult
@@ -59,6 +66,7 @@ struct AIAction: Action {
         self.modelName = modelName
         self.branch = branch
         self.sessionTimestamp = sessionTimestamp
+        self.waitingFor = waitingFor
         self.runner = runner
     }
 
@@ -144,7 +152,8 @@ extension AIAction {
             projectPath: session.project,
             modelName: session.model,
             branch: session.branch,
-            sessionTimestamp: session.timestamp
+            sessionTimestamp: session.timestamp,
+            waitingFor: session.waitingFor
         ) { _ in
             open()
             return .dismiss
@@ -164,6 +173,9 @@ extension AIAction {
         }
         if let branch = session.branch {
             keywords.append(branch.lowercased())
+        }
+        if session.waitingFor != nil {
+            keywords.append("waiting")
         }
         return keywords
     }

@@ -80,13 +80,29 @@ final class RankingTableTests: XCTestCase {
         RankingCase("next theme", expect: .first("theme/next")),
         RankingCase("search spotify", expect: .first("spotify/search")),
         RankingCase("center window", expect: .first("window/center")),
+        // A session waiting on the user tops the empty list, even over an action used a
+        // minute ago, but not an event about to start.
+        RankingCase(
+            "", awaiting: RankingCorpus.lintSession, picks: [Pick("", "theme/switch", times: 50, minutesAgo: 1)],
+            expect: .first(RankingCorpus.lintSession)
+        ),
+        RankingCase(
+            "", pairingStartsIn: 3, awaiting: RankingCorpus.lintSession, expect: .first(RankingCorpus.pairingEvent)
+        ),
+        // "fix" starts the other session's title but only the waiting one's branch.
+        RankingCase("fix", expect: .first("anthropic/session.release")),
+        RankingCase("fix", awaiting: RankingCorpus.lintSession, expect: .first(RankingCorpus.lintSession)),
+        RankingCase("waiting", awaiting: RankingCorpus.lintSession, expect: .first(RankingCorpus.lintSession)),
+        // Too short to name the session, so its scattered S…a in the subtitle gets no lift.
+        RankingCase("sa", awaiting: RankingCorpus.lintSession, expect: .first("application/app.com.apple.Safari")),
     ]
 
     // MARK: - Ranking
 
     private func rank(_ rankingCase: RankingCase) async -> [Ranked] {
-        let corpus = await RankingCorpus.build(now: Self.now, pairingStartsIn: rankingCase.pairingStartsIn)
-            + RankingCorpus.fallbacks(for: rankingCase.query)
+        let corpus = await RankingCorpus.build(
+            now: Self.now, pairingStartsIn: rankingCase.pairingStartsIn, awaiting: rankingCase.awaiting
+        ) + RankingCorpus.fallbacks(for: rankingCase.query)
         let scoring = scoring(rankingCase)
         let query = FuzzyMatcher.Query(scoring.query)
         var ranked: [Ranked] = corpus.compactMap { scorable in
@@ -103,14 +119,16 @@ final class RankingTableTests: XCTestCase {
         return ranked
     }
 
-    /// Picks go through the usage tracker as the picker records them, ten minutes ago.
+    /// Picks go through the usage tracker as the picker records them, ten minutes ago
+    /// unless a pick says otherwise.
     private func scoring(_ rankingCase: RankingCase) -> ScoringContext {
         let storage = FileManager.default.temporaryDirectory.appendingPathComponent("ranking-\(UUID().uuidString).json")
         let tracker = UsageTracker(storageURL: storage)
         for pick in rankingCase.picks {
             for _ in 0 ..< pick.times {
                 tracker.recordUsage(
-                    actionID: ActionID(pick.actionID), query: pick.query, at: Self.now.addingTimeInterval(-10 * 60)
+                    actionID: ActionID(pick.actionID), query: pick.query,
+                    at: Self.now.addingTimeInterval(-pick.minutesAgo * 60)
                 )
             }
         }
@@ -124,7 +142,8 @@ final class RankingTableTests: XCTestCase {
         var lines = ["== \(rankingCase.label)  [\(rankingCase.expectation)]"]
         for (index, row) in ranked.prefix(5).enumerated() {
             let eval = row.eval
-            let terms = [eval.final, eval.fuzzy, eval.affinity, eval.imminence].map { String(format: "%.3f", $0) }
+            let terms = [eval.final, eval.fuzzy, eval.affinity, eval.imminence, eval.awaiting]
+                .map { String(format: "%.3f", $0) }
             lines.append("  \(index + 1). \(terms.joined(separator: " "))  \(row.id)  \(row.scorable.action.title)")
         }
         return lines.joined(separator: "\n")
@@ -146,23 +165,30 @@ private struct Pick {
     let query: String
     let actionID: String
     let times: Int
+    let minutesAgo: Double
 
-    init(_ query: String, _ actionID: String, times: Int) {
+    init(_ query: String, _ actionID: String, times: Int, minutesAgo: Double = 10) {
         self.query = query
         self.actionID = actionID
         self.times = times
+        self.minutesAgo = minutesAgo
     }
 }
 
 private struct RankingCase {
     let query: String
     let pairingStartsIn: Double?
+    let awaiting: String?
     let picks: [Pick]
     let expectation: Expectation
 
-    init(_ query: String, pairingStartsIn: Double? = nil, picks: [Pick] = [], expect: Expectation) {
+    init(
+        _ query: String, pairingStartsIn: Double? = nil, awaiting: String? = nil, picks: [Pick] = [],
+        expect: Expectation
+    ) {
         self.query = query
         self.pairingStartsIn = pairingStartsIn
+        self.awaiting = awaiting
         self.picks = picks
         self.expectation = expect
     }
@@ -170,6 +196,7 @@ private struct RankingCase {
     var label: String {
         var parts = ["\"\(query)\""]
         if let pairingStartsIn { parts.append("event in \(Int(pairingStartsIn)) min") }
+        if let awaiting { parts.append("\(awaiting) waiting") }
         for pick in picks {
             parts.append("\(pick.actionID) ×\(pick.times) via \"\(pick.query)\"")
         }
