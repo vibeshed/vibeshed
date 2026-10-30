@@ -43,27 +43,8 @@ enum SystemManager {
         try runAppleScript(script)
     }
 
-    static func setAutoAppearance() throws {
-        // Remove explicit dark/light override so the system follows its schedule
-        runProcessIgnoringErrors("/usr/bin/defaults", "delete", "NSGlobalDomain", "AppleInterfaceStyle")
-
-        try runProcess(
-            "/usr/bin/defaults",
-            "write",
-            "NSGlobalDomain",
-            "AppleInterfaceStyleSwitchesAutomatically",
-            "-bool",
-            "true"
-        )
-
-        // Notify the system of the change
-        try? AppleScriptRunner.runSync("""
-            tell application "System Events"
-                tell appearance preferences
-                    set dark mode to dark mode
-                end tell
-            end tell
-        """)
+    static func setAutoAppearance() -> Bool {
+        SystemAppearance.setSwitchesAutomatically(true)
     }
 
     // MARK: - Dock & Menu Bar

@@ -76,6 +76,20 @@ actor ThemeApplier {
         await enqueue { await self.performApply(theme, config: config, options: options) }.value
     }
 
+    /// `apply`, for a change the user didn't ask for: an open preview session goes first.
+    func applyUnlessPreviewing(_ theme: ResolvedTheme, config: ThemeConfig, options: Options) async {
+        await enqueue {
+            guard await self.previewSession == nil else { return }
+            _ = await self.performApply(theme, config: config, options: options)
+        }.value
+    }
+
+    /// Waits for everything queued so far. False if a preview session is open, which
+    /// leaves the system showing a theme nobody has committed to.
+    func settled() async -> Bool {
+        await enqueue { await self.previewSession == nil }.value
+    }
+
     /// Previews `theme`. `isCurrent` means it's what is already applied: until something
     /// else has been previewed, resting on it changes nothing.
     func preview(_ theme: ResolvedTheme, config: ThemeConfig, options: Options, isCurrent: Bool) async {

@@ -105,6 +105,9 @@ struct ThemeDefinition: Codable, Sendable, Equatable {
     /// Another theme (by name) to inherit colors, mode, wallpaper and app overrides from.
     var base: String?
     var mode: ThemeMode?
+    /// The theme (by name) of the opposite mode that this one switches to when the system
+    /// does. Declaring it on either side links both. Built-in pairs: `BuiltInThemes.pairs`.
+    var pair: String?
     var colors: [String: String] = [:]
     /// Image file, or a folder of images (the first, sorted, is used).
     var wallpaper: String?
@@ -124,6 +127,7 @@ struct ThemeDefinition: Codable, Sendable, Equatable {
         name: String,
         base: String? = nil,
         mode: ThemeMode? = nil,
+        pair: String? = nil,
         colors: [String: String] = [:],
         wallpaper: String? = nil,
         wallpaperStyle: String? = nil,
@@ -136,6 +140,7 @@ struct ThemeDefinition: Codable, Sendable, Equatable {
         self.name = name
         self.base = base
         self.mode = mode
+        self.pair = pair
         self.colors = colors
         self.wallpaper = wallpaper
         self.wallpaperStyle = wallpaperStyle
@@ -151,6 +156,7 @@ struct ThemeDefinition: Codable, Sendable, Equatable {
         name = try container.decode(String.self, forKey: .name)
         base = try container.decodeIfPresent(String.self, forKey: .base)
         mode = try container.decodeIfPresent(ThemeMode.self, forKey: .mode)
+        pair = try container.decodeIfPresent(String.self, forKey: .pair)
         colors = try container.decodeIfPresent([String: String].self, forKey: .colors) ?? [:]
         wallpaper = try container.decodeIfPresent(String.self, forKey: .wallpaper)
         wallpaperStyle = try container.decodeIfPresent(String.self, forKey: .wallpaperStyle)

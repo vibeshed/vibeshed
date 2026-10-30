@@ -22,6 +22,9 @@ struct ResolvedTheme: Sendable, Equatable, Identifiable {
     let macosAccent: String?
     let appOverrides: [String: String]
     let source: Source
+    /// Slugs of the opposite-mode themes this one switches to when the system does; empty
+    /// for a theme that is specifically light or dark.
+    var counterparts: [String] = []
 
     var id: String { slug }
 
@@ -46,6 +49,18 @@ enum ThemeCatalog {
 
         func theme(slug: String) -> ResolvedTheme? {
             themes.first { $0.slug == slug }
+        }
+
+        /// What `current` should give way to with the system in `mode`: nil if it already
+        /// matches or has no other half. `preferred` picks among a family's variants.
+        func counterpart(
+            of current: ResolvedTheme,
+            for mode: ThemeMode,
+            preferring preferred: String? = nil
+        ) -> ResolvedTheme? {
+            guard current.palette.mode != mode else { return nil }
+            let slug = current.counterparts.first { $0 == preferred } ?? current.counterparts.first
+            return slug.flatMap(theme(slug:))
         }
     }
 
@@ -84,7 +99,53 @@ enum ThemeCatalog {
                 errors.append("Theme '\(definition.name)': \(error.localizedDescription)")
             }
         }
+        let declared = order.compactMap { bySlug[$0]?.0 }.compactMap { definition in
+            definition.pair.map { (name: definition.name, pair: $0) }
+        }
+        linkPairs(&themes, declared: declared, errors: &errors)
         return Result(themes: themes, errors: errors)
+    }
+
+    /// Fills in `counterparts`, both ways, from `pair:` settings and then the built-in
+    /// table. A table entry that no longer holds (a built-in redefined in the same mode,
+    /// or left out) just doesn't apply.
+    private static func linkPairs(
+        _ themes: inout [ResolvedTheme],
+        declared: [(name: String, pair: String)],
+        errors: inout [String]
+    ) {
+        let positions = Dictionary(uniqueKeysWithValues: themes.enumerated().map { ($1.slug, $0) })
+        func position(of name: String) -> Int? {
+            positions[ResolvedTheme.slug(for: name)]
+        }
+        func link(_ first: Int, _ second: Int) {
+            if !themes[first].counterparts.contains(themes[second].slug) {
+                themes[first].counterparts.append(themes[second].slug)
+            }
+            if !themes[second].counterparts.contains(themes[first].slug) {
+                themes[second].counterparts.append(themes[first].slug)
+            }
+        }
+
+        for (name, pair) in declared {
+            guard let first = position(of: name) else { continue }
+            guard let second = position(of: pair) else {
+                errors.append("Theme '\(name)': pair '\(pair)' not found")
+                continue
+            }
+            guard themes[first].palette.mode != themes[second].palette.mode else {
+                let mode = themes[first].palette.mode.rawValue
+                errors.append("Theme '\(name)': pair '\(pair)' is \(mode) too, a pair needs one of each")
+                continue
+            }
+            link(first, second)
+        }
+        for family in BuiltInThemes.pairs {
+            guard let light = position(of: family.light), themes[light].palette.mode == .light else { continue }
+            for dark in family.darks.compactMap(position(of:)) where themes[dark].palette.mode == .dark {
+                link(light, dark)
+            }
+        }
     }
 
     /// Merges a definition over its `base` chain (base values first, own values win).

@@ -170,8 +170,10 @@ actor SystemModule: ModuleConfigurable {
                 relevanceScore: 0.8,
                 keywords: ["auto", "automatic", "dark", "light", "mode", "appearance", "theme", "system"]
             ) { _ in
-                try SystemManager.setAutoAppearance()
-                return .showResult(title: "Auto Appearance", body: "Appearance will now follow the system schedule")
+                let body = SystemManager.setAutoAppearance()
+                    ? "Appearance will now follow the system schedule"
+                    : "Couldn't turn on Auto, set it in System Settings › Appearance"
+                return .showResult(title: "Auto Appearance", body: body)
             },
         ]
     }

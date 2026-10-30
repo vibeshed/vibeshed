@@ -15,6 +15,26 @@ enum BuiltInThemes {
         rosePine, kanagawa, dracula, oneDark, solarizedLight, flexokiLight,
     ]
 
+    /// Themes that are one design's light and dark halves, and so follow the system's mode.
+    /// A family's dark variants all pair with its one light theme. Everything else is
+    /// specifically light or dark.
+    static let pairs: [(light: String, darks: [String])] = [
+        ("Ayu Light", ["Ayu Dark", "Ayu Mirage"]),
+        ("Catppuccin Latte", ["Catppuccin Mocha", "Catppuccin Macchiato", "Catppuccin Frappé"]),
+        ("Dawnfox", ["Nightfox", "Carbonfox"]),
+        ("Everforest Light", ["Everforest"]),
+        ("Flexoki Light", ["Flexoki Dark"]),
+        ("GitHub Light", ["GitHub Dark", "GitHub Dark Dimmed"]),
+        ("Gruvbox Light", ["Gruvbox"]),
+        ("Kanagawa Lotus", ["Kanagawa", "Kanagawa Dragon"]),
+        ("Melange Light", ["Melange Dark"]),
+        ("Nord Light", ["Nord"]),
+        ("One Light", ["One Dark"]),
+        ("Rosé Pine Dawn", ["Rosé Pine", "Rosé Pine Moon"]),
+        ("Solarized Light", ["Solarized Dark"]),
+        ("Tokyo Night Day", ["Tokyo Night", "Tokyo Night Storm", "Tokyo Night Moon"]),
+    ]
+
     static let tokyoNight = ThemeDefinition(
         name: "Tokyo Night",
         mode: .dark,

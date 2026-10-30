@@ -27,6 +27,8 @@ actor ThemeModule: ModuleConfigurable {
     let fontApplier = FontApplier()
     private let log = Log.module("theme")
     private var appWatchers: [AppLifecycleWatcher] = []
+    private var appearanceWatcher: SystemAppearanceWatcher?
+    private var appearanceSync: Task<Void, Never>?
 
     /// The scripted targets that are on: appearance through System Events, iTerm's
     /// colors through iTerm, and the github target through browser tabs.
@@ -56,12 +58,25 @@ actor ThemeModule: ModuleConfigurable {
                 }
             }
         }
+        appearanceWatcher = await MainActor.run {
+            SystemAppearanceWatcher { [weak self] in
+                Task { await self?.systemAppearanceChanged() }
+            }
+        }
     }
 
     func teardown() async {
         for watcher in appWatchers {
             await watcher.stop()
         }
+        await appearanceWatcher?.stop()
+        appearanceSync?.cancel()
+    }
+
+    /// The latest change wins: each one restarts the sync in ThemeModule+Appearance.
+    private func systemAppearanceChanged() {
+        appearanceSync?.cancel()
+        appearanceSync = Task { await syncWithSystemAppearance() }
     }
 
     /// Resolves the theme after the delay, so a switch made meanwhile isn't undone.
@@ -76,6 +91,9 @@ actor ThemeModule: ModuleConfigurable {
         self.config = config
         rebuildCatalog()
         await eventBus?.publish(.moduleActionsChanged(moduleID: id))
+        // Also the first look after launch (config arrives right after `initialize`): the
+        // system may have switched while Vibeshed wasn't running.
+        if appearanceWatcher != nil { systemAppearanceChanged() }
     }
 
     static func validate(_ config: ThemeConfig) -> ConfigValidationResult {
@@ -261,7 +279,8 @@ actor ThemeModule: ModuleConfigurable {
     static func describe(_ theme: ResolvedTheme) -> String {
         if let subtitle = theme.subtitle { return subtitle }
         let mode = theme.palette.mode == .dark ? "Dark" : "Light"
-        return theme.source == .builtIn ? "\(mode) theme" : "\(mode) theme · \(theme.source.rawValue)"
+        let kind = theme.counterparts.isEmpty ? "\(mode) theme" : "\(mode) theme · follows system appearance"
+        return theme.source == .builtIn ? kind : "\(kind) · \(theme.source.rawValue)"
     }
 }
 

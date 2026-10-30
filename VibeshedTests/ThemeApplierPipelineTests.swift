@@ -144,6 +144,41 @@ final class ThemeApplierPipelineTests: XCTestCase {
         XCTAssertEqual(entries.dropFirst(3).sorted(), ["apply wallpaper \(theme.slug)", "apply zed \(theme.slug)"])
     }
 
+    /// A preview flips the system's mode, which must not read as the system switching.
+    func testFollowingTheSystemWaitsOutAPreviewSession() async {
+        let journal = Journal()
+        let applier = makeApplier(journal: journal)
+        let settledBefore = await applier.settled()
+        XCTAssertTrue(settledBefore)
+
+        await preview(applier, themes[0])
+        let settledDuring = await applier.settled()
+        XCTAssertFalse(settledDuring)
+        await applier.applyUnlessPreviewing(themes[1], config: config, options: options)
+        XCTAssertFalse(journal.entries.contains("commit \(themes[1].slug)"), "\(journal.entries)")
+
+        await applier.endPreview(committed: false)
+        let settledAfter = await applier.settled()
+        XCTAssertTrue(settledAfter)
+        await applier.applyUnlessPreviewing(themes[1], config: config, options: options)
+        XCTAssertTrue(journal.entries.contains("commit \(themes[1].slug)"), "\(journal.entries)")
+    }
+
+    /// `settled` only answers once a revert in progress is done, so the mode read after it
+    /// is the real one.
+    func testSettledWaitsForARevertToFinish() async {
+        let journal = Journal()
+        let applier = makeApplier(journal: journal, restoreTime: .milliseconds(100))
+        await preview(applier, themes[0])
+        let ending = Task { await applier.endPreview(committed: false) }
+        try? await Task.sleep(for: .milliseconds(20))
+
+        let settled = await applier.settled()
+        XCTAssertTrue(settled)
+        XCTAssertTrue(journal.entries.contains("restored zed"), "\(journal.entries)")
+        await ending.value
+    }
+
     /// Escape: the picker shows the committed theme again before the (slow) restores finish.
     func testEndingThePreviewRevertsThePickerFirst() async {
         let journal = Journal()
