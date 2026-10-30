@@ -158,11 +158,9 @@ actor ClipboardModule: ModuleConfigurable {
             guard let content else {
                 return .showResult(title: "Error", body: "Clipboard item not found")
             }
-            await MainActor.run {
-                ClipboardManager.writeToPasteboard(content)
-                if pasteOnSelect {
-                    ClipboardManager.pasteFromPasteboard()
-                }
+            await ClipboardManager.writeToPasteboard(content)
+            if pasteOnSelect {
+                await ClipboardManager.pasteFromPasteboard()
             }
             return .dismiss
         }
