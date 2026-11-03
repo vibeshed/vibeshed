@@ -47,13 +47,14 @@ A keyboard-driven macOS launcher built with SwiftUI. Control your Mac with keyst
 - Launch, focus, or quit any app
 - Search and switch browser tabs across Safari and Chromium browsers
 - Browser bookmarks and most-visited sites
-- Default browser with per-URL routing to specific browsers/profiles
+- Default browser with per-URL routing to specific browsers/profiles, and links to Zoom, Slack, Teams, Linear, Notion, Discord, Telegram and more opened in their apps
 
 **Productivity**
 - Clipboard history with search and paste
 - Timers and reminders
 - Math expressions, unit conversions, currency conversion
 - Calendar events with one-click join for Zoom/Meet
+- Run any shortcut, and search other apps' content through shortcuts that use their own find actions
 - Meeting prep: hide distractions and surface relevant docs
 
 **Developer Tools**
@@ -159,6 +160,7 @@ The app watches the config file for changes and hot-reloads automatically.
 | **Telegram** | Quick-open configured chats and groups |
 | **Calendar** | Upcoming events, join Zoom/Meet links |
 | **Notes** | Search Apple Notes by title or text, open them, start new ones |
+| **Shortcuts** | Run your shortcuts; ones in a Vibeshed folder search other apps and list what they find |
 | **MeetingPrep** | Prepare workspace for meetings |
 | **Timer** | Set timers and reminders |
 | **Math** | Arithmetic, unit/currency conversion |

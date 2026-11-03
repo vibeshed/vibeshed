@@ -125,7 +125,7 @@ final class URIManager {
     // MARK: - HTTP/HTTPS Routing
 
     private func handleWebURL(_ url: URL) {
-        if openZoomMeetingIfPossible(url) {
+        if openInAppIfPossible(url) {
             return
         }
 
@@ -136,22 +136,16 @@ final class URIManager {
         showBrowserChooser(for: url)
     }
 
-    // MARK: - Zoom Meeting Links
+    // MARK: - App Links
 
-    /// Zoom join links (https://*.zoom.us/j/...) always launch the Zoom app directly,
-    /// bypassing routing rules and the browser chooser, so meetings never open in a
-    /// browser tab or show a picker.
-    private func openZoomMeetingIfPossible(_ url: URL) -> Bool {
-        guard let host = url.host?.lowercased(), host.hasSuffix("zoom.us"),
-              let parsed = ZoomManager.parseMeetingInput(url.absoluteString),
-              let zoomAppURL = ZoomManager.joinURL(meetingId: parsed.meetingId, password: parsed.password),
-              NSWorkspace.shared.urlForApplication(withBundleIdentifier: ZoomManager.bundleID) != nil
-        else {
+    /// Links to an app in `openInApps` (a Zoom meeting, a Slack channel, …) launch that
+    /// app directly when it's installed, bypassing routing rules and the browser chooser.
+    private func openInAppIfPossible(_ url: URL) -> Bool {
+        guard let link = DeepLinkCatalog.installedLink(for: url, among: Set(currentConfig.openInApps)) else {
             return false
         }
-
-        NSWorkspace.shared.open(zoomAppURL)
-        Log.uri.info("Routed \(url, privacy: .public) to Zoom app")
+        NSWorkspace.shared.open(link.url)
+        Log.uri.info("Routed \(url, privacy: .public) to \(link.appName, privacy: .public)")
         return true
     }
 
@@ -274,6 +268,11 @@ final class URIManager {
 extension URIManager {
     private func validateRules() {
         routingErrors = [:]
+        for app in currentConfig.openInApps where !DeepLinkCatalog.appIDs.contains(app) {
+            let message = "Unknown app; openInApps takes \(DeepLinkCatalog.appIDs.joined(separator: ", "))"
+            routingErrors["openInApps:\(app)"] = message
+            Log.uri.error("openInApps '\(app, privacy: .public)': \(message, privacy: .public)")
+        }
         for (index, rule) in currentConfig.rules.enumerated() {
             let key = "\(index):\(rule.pattern)"
 

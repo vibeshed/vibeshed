@@ -12,6 +12,9 @@ struct URLRoutingConfig: Codable, Sendable, Equatable {
     var defaultBrowser: String?
     var defaultProfile: String?
     var registerAsDefaultBrowser: Bool = true
+    /// Apps from `DeepLinkCatalog` whose links open in the app, when it's installed, before
+    /// any rule applies.
+    var openInApps: [String] = ["zoom"]
 }
 
 extension URLRoutingConfig {
@@ -26,5 +29,6 @@ extension URLRoutingConfig {
         defaultProfile = try container.decodeIfPresent(String.self, forKey: .defaultProfile)
         registerAsDefaultBrowser = try container.decodeIfPresent(Bool.self, forKey: .registerAsDefaultBrowser)
             ?? defaults.registerAsDefaultBrowser
+        openInApps = try container.decodeIfPresent([String].self, forKey: .openInApps) ?? defaults.openInApps
     }
 }
