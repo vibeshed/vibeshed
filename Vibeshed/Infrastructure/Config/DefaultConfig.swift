@@ -63,6 +63,7 @@ enum DefaultConfig {
     static let optionalModules: [Entry] = [
         Entry("menu", "the frontmost app's menu items (Accessibility)"),
         Entry("bookmark", "browser bookmarks/history (Full Disk Access for Safari)"),
+        Entry("safari", "Safari history, Favorites and iCloud Tabs (Full Disk Access)"),
         Entry("calendar", "upcoming events (Calendars)"),
         Entry("notes", "search, open and create Apple Notes (Automation)"),
         Entry("meetingPrep", "get ready for the next meeting (Calendars + Screen Recording)"),

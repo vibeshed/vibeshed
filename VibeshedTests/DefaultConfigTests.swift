@@ -189,7 +189,7 @@ final class DefaultConfigTests: XCTestCase {
             ApplicationModule(), SystemModule(), SettingsModule(), AudioModule(), ProcessesModule(),
             PerformanceModule(), WindowModule(), ClipboardModule(), ThemeModule(), MathModule(), TimerModule(),
             EmojiModule(), WebSearchModule(), TilingModule(), MenuModule(), BookmarkModule(), CalendarModule(),
-            MeetingPrepModule(), NotesModule(), TerminalModule(), WallpaperModule(),
+            MeetingPrepModule(), NotesModule(), TerminalModule(), WallpaperModule(), SafariModule(),
         ]
         var ids: Set<String> = []
         for module in modules {
