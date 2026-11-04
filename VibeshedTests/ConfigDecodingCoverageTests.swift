@@ -130,6 +130,11 @@ final class ConfigDecodingCoverageTests: XCTestCase {
             $0.newNoteFolder = "f"
             $0.enabledActions = ["x"]
         })
+        try assertRoundTrip(changed(ShortcutsConfig()) {
+            $0.searchFolder = "f"
+            $0.searchTimeout = 1
+            $0.excluded = ["x"]
+        })
         try assertRoundTrip(changed(MenuConfig()) {
             $0.showInSearch = false
             $0.maxSubmenuItems = 1
@@ -184,7 +189,8 @@ final class ConfigDecodingCoverageTests: XCTestCase {
             rules: [URLRoutingRule(pattern: "p", browser: "b", profile: nil, action: nil)],
             defaultBrowser: "b",
             defaultProfile: "p",
-            registerAsDefaultBrowser: false
+            registerAsDefaultBrowser: false,
+            openInApps: ["slack"]
         ))
     }
 
@@ -268,6 +274,7 @@ private extension ConfigDecodingCoverageTests {
             "meetingPrep": ModuleSection(MeetingPrepModule.self),
             "bookmark": ModuleSection(BookmarkModule.self),
             "notes": ModuleSection(NotesModule.self),
+            "shortcuts": ModuleSection(ShortcutsModule.self),
             "timer": ModuleSection(TimerModule.self),
             "math": ModuleSection(MathModule.self),
             "homebrew": ModuleSection(HomebrewModule.self),

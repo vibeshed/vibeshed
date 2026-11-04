@@ -824,6 +824,21 @@ modules:
     # newNoteFolder: "Inbox"   # folder for New Note (default: Notes' default folder)
     # enabledActions: [search, create, note]   # full names or the note family
 
+  # Your shortcuts from the Shortcuts app: each one gets a row that runs it, and
+  # shortcuts/run takes one by name (?shortcut=Name) for keybindings and aliases.
+  # Shortcuts in searchFolder are searches instead. Picking one runs it with what
+  # you type as its input (text; empty when nothing is typed yet) and lists what it
+  # outputs. That's how other apps' content gets into the picker: Notes', Mail's or
+  # any app's own Find actions work inside a shortcut. A search shortcut outputs:
+  #   - a list of dictionaries with title and, optionally, subtitle, url, text, icon
+  #     (an SF Symbol name) — picking a row opens its url, or copies its text;
+  #   - or text, one result per line; a line that's a link opens it.
+  # It shouldn't ask for input or show alerts: it's stopped after searchTimeout.
+  shortcuts:
+    searchFolder: "Vibeshed"     # "" makes every shortcut a plain one
+    searchTimeout: 10            # seconds
+    excluded: []                 # shortcut names to leave out
+
   # --- Timers & Reminders ---
   timer:
     defaultSound: "Glass"                # macOS system sound name
@@ -925,6 +940,10 @@ urlRouting:
   registerAsDefaultBrowser: true
   defaultBrowser: "safari"    # Pre-selected in the browser chooser picker
   # defaultProfile: "Default"  # Optional: default Chromium profile for rules without explicit profile
+  # Links to these apps open in the app when it's installed, before any rule:
+  # zoom (meetings), slack (app.slack.com channels), teams, linear, notion, discord,
+  # telegram (t.me), whatsapp (wa.me), spotify, music, podcasts, appStore, maps, steam.
+  openInApps: [zoom, slack, teams]   # default: [zoom]
   rules:
     # URLs matching rules open directly without showing the chooser
     - pattern: "*.github.com/*"
