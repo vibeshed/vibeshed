@@ -160,6 +160,15 @@ final class SafariHistoryIndexTests: XCTestCase {
         XCTAssertEqual(SearchWords.queryWords("  Swift  UI ").count, 2)
     }
 
+    /// Canonically equivalent text folds alike: a title with a decomposed "é" (e + U+0301)
+    /// matches a typed, precomposed "é".
+    func testFoldsCanonicallyEquivalentTextAlike() {
+        XCTAssertEqual(SearchWords.fold("Cafe\u{301} Menu"), SearchWords.fold("Café menu"))
+        let index = SafariHistoryIndex(entries: [entry("https://cafe.example/", "Cafe\u{301} Menu")])
+        XCTAssertEqual(index.search("café", mode: .wordPrefix, limit: 10, now: now).count, 1)
+        XCTAssertEqual(index.search("Cafe\u{301}", mode: .anywhere, limit: 10, now: now).count, 1)
+    }
+
     func testWordPrefixNeedsEveryWordToStartAWord() {
         let index = SafariHistoryIndex(entries: [
             entry("https://github.com/vibeshed/vibeshed/pull/99", "Cut a release with one command"),
@@ -324,6 +333,10 @@ final class SafariModuleTests: XCTestCase {
             for: "page", in: ActionID("safari/searchFavorites"), query: ""
         )
         XCTAssertEqual(favorites.map(\.subtitle), ["vibeshed.dev", "Dev · forums.swift.org"])
+        let swift = await module.provideParameterOptions(
+            for: "page", in: ActionID("safari/searchFavorites"), query: "swift"
+        )
+        XCTAssertEqual(swift.map(\.id), ["https://forums.swift.org/"], "filtered by the module")
 
         let tabs = await module.provideParameterOptions(for: "page", in: ActionID("safari/searchCloudTabs"), query: "")
         XCTAssertEqual(tabs.map(\.label), ["Recipes"])
@@ -343,6 +356,64 @@ final class SafariModuleTests: XCTestCase {
         )
         XCTAssertEqual(options.map(\.id), [""])
         XCTAssertEqual(options.first?.label, "Couldn't read Safari's history")
+    }
+
+    /// Favorites or iCloud Tabs that can't be read say why whatever is typed: the module
+    /// filters those options itself, so the picker can't filter the failure row away.
+    func testUnreadableFavoritesAndTabsShowWhyForAnyQuery() async throws {
+        let broken = try SafariFixture()
+        try Data("not a plist".utf8).write(to: URL(fileURLWithPath: broken.files.bookmarks))
+        try Data("not a database".utf8).write(to: URL(fileURLWithPath: broken.files.cloudTabCandidates[0]))
+        let module = SafariModule(files: broken.files, thisMac: nil, safariPath: nil) { _ in }
+        for name in ["searchFavorites", "searchCloudTabs"] {
+            let id = ActionID(module: "safari", name: name)
+            let action = await module.action(id: id)
+            XCTAssertEqual(action?.parameters.first?.rankedByModule, true, name)
+            let options = await module.provideParameterOptions(for: "page", in: id, query: "swift forums")
+            XCTAssertEqual(options.map(\.id), [""], name)
+        }
+    }
+
+    /// A row the module found for words spread over its title and address ("rel" starts
+    /// "release", "vibe" starts "vibeshed") survives the picker's own scoring.
+    func testHistoryRowsTheModuleFoundSurviveThePickersScoring() async {
+        let module = await makeModule()
+        let rows = await module.provideActions(query: "rel vibe", scoring: empty)
+        let history = rows.filter { $0.id.actionName.hasPrefix("history.") }
+        XCTAssertEqual(history.map(\.title), ["Cut a release with one command"])
+        let scoring = ScoringContext(usageCounts: [:], lastUsedDates: [:], query: "rel vibe", systemContext: nil)
+        let ranked = ActionScorer.scoreAndRank(
+            corpus: rows.map { ScorableAction(action: $0) }, query: "rel vibe", scoring: scoring
+        ).0
+        XCTAssertEqual(ranked.map(\.id), history.map(\.id))
+    }
+
+    /// A reload that changed only an older page (same count, same newest page) still tells
+    /// the picker, so a list on screen doesn't keep the old title.
+    func testAChangedOlderPageIsAnnounced() async throws {
+        let bus = EventBus()
+        let (_, stream) = await bus.subscribe()
+        let announced = Counter()
+        let listener = Task {
+            for await event in stream {
+                if case .moduleActionsChanged(moduleID: "safari") = event {
+                    announced.add()
+                }
+            }
+        }
+        defer { listener.cancel() }
+        let module = await makeModule()
+        try await module.initialize(context: ModuleContext(eventBus: bus, loggerFactory: { Log.module($0) }))
+        let before = announced.value
+
+        try fixture.retitle(url: "https://news.ycombinator.com/", to: "Hacker News (old)")
+        await module.loadHistoryIfNeeded()
+        let titles = await module.history.entries.map(\.title)
+        XCTAssertEqual(titles, ["Cut a release with one command", "Hacker News (old)"])
+        for _ in 0 ..< 50 where announced.value == before {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(announced.value, before + 1)
     }
 
     func testHistoryIsReadAgainOnceSafariWrites() async throws {

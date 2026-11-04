@@ -260,15 +260,17 @@ enum SearchWords {
     }
 
     /// Appends `text`'s words to `bytes`. ASCII, which nearly every address and most
-    /// titles are, needs no case mapping; other text is lowercased first.
+    /// titles are, needs no case mapping; other text is lowercased first, then composed
+    /// (NFC), so canonically equivalent text has the same bytes: a title's "e" + U+0301
+    /// matches a typed "é". Composing after lowercasing, which can decompose ("İ").
     static func fold(_ text: some StringProtocol, into bytes: inout [UInt8]) {
         let mark = bytes.count
         if text.utf8.withContiguousStorageIfAvailable({ foldUTF8($0, asciiOnly: true, into: &bytes) }) == true {
             return
         }
         bytes.removeSubrange(mark...)
-        var lowercased = text.lowercased()
-        lowercased.withUTF8 { _ = foldUTF8($0, asciiOnly: false, into: &bytes) }
+        var folded = text.lowercased().precomposedStringWithCanonicalMapping
+        folded.withUTF8 { _ = foldUTF8($0, asciiOnly: false, into: &bytes) }
     }
 
     /// Letters and digits make words, other ASCII separates them. Beyond ASCII,

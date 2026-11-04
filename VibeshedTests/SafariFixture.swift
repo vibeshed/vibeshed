@@ -214,6 +214,34 @@ extension SafariFixture {
     }
 }
 
+extension SafariFixture {
+    /// A new title for a page's visits, through a second connection, as Safari updates a
+    /// page it already listed.
+    func retitle(url: String, to title: String) throws {
+        let db = try Self.open(files.history)
+        defer { sqlite3_close(db) }
+        try Self.exec(
+            db,
+            "UPDATE history_visits SET title = '\(title)' "
+                + "WHERE history_item = (SELECT id FROM history_items WHERE url = '\(url)')"
+        )
+    }
+}
+
+/// Counts from any thread.
+final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.withLock { count }
+    }
+
+    func add() {
+        lock.withLock { count += 1 }
+    }
+}
+
 /// URLs a test's module opened.
 final class OpenedURLs: @unchecked Sendable {
     private let lock = NSLock()

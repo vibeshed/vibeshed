@@ -50,9 +50,10 @@ extension SafariModule {
                     label: "Page",
                     type: .dynamicSelection(hint: "page"),
                     isRequired: true,
-                    // History is ranked here, by match and visits; the few Favorites and
-                    // tabs are left to the picker's fuzzy matching.
-                    rankedByModule: name == "searchHistory"
+                    // History is ranked here, by match and visits; Favorites and tabs are
+                    // fuzzy-matched here, as the picker would, so the row saying a source
+                    // can't be read isn't filtered out by the page name being typed.
+                    rankedByModule: true
                 ),
             ]
         ) { [self] values in
@@ -171,13 +172,13 @@ extension SafariModule {
             if favorites.isEmpty, let favoritesError {
                 return [Self.failureOption("Couldn't read your Favorites", favoritesError)]
             }
-            return favorites.map(favoriteOption)
+            return Self.matching(favorites.map(favoriteOption), query)
         case "searchCloudTabs":
             refreshCloudTabsIfChanged()
             if cloudTabs.isEmpty, let cloudTabsError {
                 return [Self.failureOption("Couldn't read iCloud Tabs", cloudTabsError)]
             }
-            return cloudTabs.map(cloudTabOption)
+            return Self.matching(cloudTabs.map(cloudTabOption), query)
         default:
             return []
         }
@@ -225,6 +226,12 @@ extension SafariModule {
     private func preview(_ page: SafariPage) -> @MainActor @Sendable () -> AnyView {
         let safariPath = safariPath
         return { AnyView(SafariPagePreview(page: page, safariPath: safariPath)) }
+    }
+
+    /// `options` fuzzy-matched against `query` the way the picker matches options it ranks
+    /// itself; all of them, in order, with nothing typed.
+    static func matching(_ options: [ParameterOption], _ query: String) -> [ParameterOption] {
+        query.trimmingCharacters(in: .whitespaces).isEmpty ? options : options.fuzzyFiltered(by: query)
     }
 
     /// Where each word of `query` first appears in `label`, for options the module ranks.

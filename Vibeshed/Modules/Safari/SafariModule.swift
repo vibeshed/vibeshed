@@ -207,7 +207,9 @@ extension SafariModule {
         case let .success(index):
             log.debug("Indexed \(index.count, privacy: .public) history pages in \(took, privacy: .public)")
             historyError = nil
-            let changed = index.count != history.count || index.entries.first != history.entries.first
+            // Every entry, not just the count and the newest: an older page can change on
+            // its own (a new title). Cheap next to the read that built the index.
+            let changed = index.entries != history.entries
             history = index
             if changed {
                 await eventBus?.publish(.moduleActionsChanged(moduleID: id))
