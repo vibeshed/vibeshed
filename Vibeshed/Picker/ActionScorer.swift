@@ -94,11 +94,9 @@ enum ActionScorer {
         }
         let action = scorable.action
         let usageBoost = scoring.usageBoost(for: action.id)
-        guard let result = FuzzyMatcher.score(
-            query,
-            target: scorable.target,
-            usageBoost: usageBoost
-        ) else { return nil }
+        guard let result = FuzzyMatcher.score(query, target: scorable.target, usageBoost: usageBoost)
+            ?? spreadWordsScore(scorable, query: query, usageBoost: usageBoost)
+        else { return nil }
 
         let contextBoost: Double = if let ctx = scoring.systemContext {
             ContextualScorer.boost(
@@ -123,6 +121,31 @@ enum ActionScorer {
             awaiting: awaitingBoost(scorable, query: query),
             titleRanges: result.titleRanges
         )
+    }
+
+    /// The score of a word-prefix action whose words the query starts across its fields:
+    /// "rel vibe", "release" in a page's title and "vibeshed" in its address. The fuzzy
+    /// matcher misses those, as it matches the whole query within one field. Scored as the
+    /// weakest of its words, it ranks below a match within one field. Nil for every other
+    /// action, and for a single word, which the fuzzy matcher has had its say on.
+    static func spreadWordsScore(
+        _ scorable: ScorableAction,
+        query: FuzzyMatcher.Query,
+        usageBoost: Double
+    ) -> (score: Double, titleRanges: [Range<String.Index>])? {
+        guard scorable.prefixWords != nil else { return nil }
+        let words = query.lowered.split(whereSeparator: \.isWhitespace)
+        guard words.count > 1 else { return nil }
+        var weakest = Double.infinity
+        var ranges: [Range<String.Index>] = []
+        for word in words {
+            guard let result = FuzzyMatcher.score(
+                FuzzyMatcher.Query(String(word)), target: scorable.target, usageBoost: usageBoost
+            ) else { return nil }
+            weakest = min(weakest, result.score)
+            ranges += result.titleRanges
+        }
+        return (weakest, ranges.sorted { $0.lowerBound < $1.lowerBound })
     }
 
     /// `awaitingUserBoost` for an action waiting on the user, when the query names it.

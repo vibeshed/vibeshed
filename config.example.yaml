@@ -814,6 +814,17 @@ modules:
     minVisitCount: 3           # minimum visits to include a history entry
     cacheTTLSeconds: 300       # re-read bookmarks/history every 5 minutes
 
+  # --- Safari ---
+  # Search Safari History, Search Safari Favorites and Search iCloud Tabs (tabs open
+  # on your other devices), plus Favorites, iCloud Tabs and the history pages matching
+  # what you type in the main search. Reads Safari's own files, so it needs Full Disk
+  # Access. Pages open in Safari.
+  safari:
+    historyResults: 8          # history matches in the main search, for 3+ letters (0 = none)
+    showFavorites: true        # Favorites as main-search rows
+    showCloudTabs: true        # iCloud Tabs as main-search rows
+    # enabledActions: [searchHistory, searchFavorites, searchCloudTabs, history, favorite, cloudTab]
+
   # --- Apple Notes ---
   # Search Notes (titles and text), New Note, and your latest notes in the main search.
   # Scripts Notes, so macOS asks once to let Vibeshed control it. The main search lists

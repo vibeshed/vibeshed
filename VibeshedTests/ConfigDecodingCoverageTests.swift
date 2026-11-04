@@ -130,6 +130,12 @@ final class ConfigDecodingCoverageTests: XCTestCase {
             $0.newNoteFolder = "f"
             $0.enabledActions = ["x"]
         })
+        try assertRoundTrip(changed(SafariConfig()) {
+            $0.historyResults = 1
+            $0.showFavorites = false
+            $0.showCloudTabs = false
+            $0.enabledActions = ["x"]
+        })
         try assertRoundTrip(changed(MenuConfig()) {
             $0.showInSearch = false
             $0.maxSubmenuItems = 1
@@ -267,6 +273,7 @@ private extension ConfigDecodingCoverageTests {
             "calendar": ModuleSection(CalendarModule.self),
             "meetingPrep": ModuleSection(MeetingPrepModule.self),
             "bookmark": ModuleSection(BookmarkModule.self),
+            "safari": ModuleSection(SafariModule.self),
             "notes": ModuleSection(NotesModule.self),
             "timer": ModuleSection(TimerModule.self),
             "math": ModuleSection(MathModule.self),

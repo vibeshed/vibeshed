@@ -279,6 +279,31 @@ final class ActionScorerTests: XCTestCase {
         XCTAssertEqual(ranked("ebsite"), [], "inside a word isn't a word start")
     }
 
+    /// Words split between the title and the subtitle still match a word-prefix action,
+    /// ranked below a match within one field; other actions still need the whole query
+    /// in one field.
+    func testWordPrefixWordsMayBeSpreadOverFields() {
+        XCTAssertEqual(ranked("satis 81"), ["github/pr.1"])
+        XCTAssertEqual(ranked("quit vibeshed"), ["github/pr.2"])
+        XCTAssertEqual(ranked("satis 48"), [], "every word still has to start a word")
+
+        let actions: [any Action] = [
+            StubAction(id: ActionID("app/spread"), title: "Release notes", subtitle: "vibeshed"),
+            StubAction(
+                id: ActionID("history/spread"), title: "Release notes", subtitle: "vibeshed",
+                requiresWordPrefixMatch: true
+            ),
+            StubAction(
+                id: ActionID("history/whole"), title: "rel vibe, release notes", subtitle: "example",
+                requiresWordPrefixMatch: true
+            ),
+        ]
+        let ids = ActionScorer.scoreAndRank(
+            allActions: actions, enrichments: [:], query: "rel vibe", scoring: scoring("rel vibe")
+        ).0.map(\.id.rawValue)
+        XCTAssertEqual(ids, ["history/whole", "history/spread"])
+    }
+
     func testWordsSplitOnPunctuationWithoutRepeats() {
         XCTAssertEqual(
             WordPrefixMatch.words(in: ["Fix: fix the #66 font-switching", "feat/font"]),
