@@ -6,7 +6,8 @@ struct ShortcutResult: Sendable, Equatable {
     var subtitle: String?
     /// Opened when the row is picked.
     var url: URL?
-    /// Copied when the row is picked and there's no `url`; the title when nil.
+    /// Copied as the shortcut gave it, whitespace and all, when the row is picked and there's
+    /// no `url`; the title when nil.
     var text: String?
     /// An SF Symbol name for the row.
     var icon: String?
@@ -69,8 +70,12 @@ enum ShortcutResultParser {
         }
         let url = string("url", "link").flatMap(link)
         guard let title = string("title", "name") ?? url?.absoluteString else { return nil }
+        // The copied payload isn't trimmed like the fields shown: indentation and a final
+        // newline are part of a snippet. An empty one is no payload, as in Shortcuts a
+        // dictionary can't leave a key out of some items only.
+        let text = (dictionary["text"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         return ShortcutResult(
-            title: title, subtitle: string("subtitle"), url: url, text: string("text"), icon: string("icon")
+            title: title, subtitle: string("subtitle"), url: url, text: text, icon: string("icon")
         )
     }
 

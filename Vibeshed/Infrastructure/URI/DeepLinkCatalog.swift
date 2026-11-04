@@ -127,13 +127,23 @@ private extension DeepLinkCatalog {
     }
 
     /// `https://app.slack.com/client/T123/C456` → `slack://channel?team=T123&id=C456`, and the
-    /// workspace alone → `slack://open?team=T123`. Slack's documented links.
+    /// workspace alone → `slack://open?team=T123`. Slack's documented links have no form for
+    /// a thread or a view (Unreads, Activity), so those stay in the browser.
     static func slack(_ url: URL) -> URL? {
         let parts = parts(url)
-        guard parts.count >= 2, parts[0] == "client" else { return nil }
+        guard parts.count == 2 || parts.count == 3, parts[0] == "client", isSlackID(parts[1], kinds: "TE")
+        else { return nil }
         let team = URLQueryItem(name: "team", value: parts[1])
-        guard parts.count >= 3 else { return make("slack://open", query: [team]) }
+        guard parts.count == 3 else { return make("slack://open", query: [team]) }
+        // A channel, a direct message or a private group.
+        guard isSlackID(parts[2], kinds: "CDG") else { return nil }
         return make("slack://channel", query: [team, URLQueryItem(name: "id", value: parts[2])])
+    }
+
+    /// Slack IDs are a kind letter and uppercase letters and digits: T0123, C0456.
+    static func isSlackID(_ part: String, kinds: String) -> Bool {
+        guard let kind = part.first, kinds.contains(kind), part.count > 1 else { return false }
+        return part.allSatisfy { ($0.isUppercase && $0.isASCII) || $0.isNumber }
     }
 
     /// `https://teams.microsoft.com/l/…` → `msteams:/l/…`, the desktop form of Teams' deep links.
@@ -178,32 +188,74 @@ private extension DeepLinkCatalog {
         return path(of: url, after: "discord://discord.com")
     }
 
-    /// t.me links in Telegram's documented `tg://` forms: a username (and a post in it), a
-    /// private channel's post, an invite.
+    /// t.me links in Telegram's documented `tg://` forms (core.telegram.org/api/links): a
+    /// username, with a bot's start options or a post in it; a private channel's post; an
+    /// invite. Each form carries over the options its `tg://` form takes, under the same
+    /// names. Anything else, such as a sticker set (`t.me/addstickers/…`), a named mini app or
+    /// an option the form doesn't take, stays in the browser.
     static func telegram(_ url: URL) -> URL? {
         var parts = parts(url)
+        // t.me/s/<channel> is the channel's web preview.
         if parts.first == "s" {
             parts.removeFirst()
         }
+        let options = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         guard let first = parts.first else { return nil }
-        if first == "c", parts.count >= 3 {
-            return make("tg://privatepost", query: [
-                URLQueryItem(name: "channel", value: parts[1]), URLQueryItem(name: "post", value: parts[2]),
-            ])
+        switch (first, parts.count) {
+        case ("c", 3) where parts.dropFirst().allSatisfy(isNumber):
+            let post = [("channel", parts[1]), ("post", parts[2])]
+            return telegramLink("privatepost", post, options, telegramPostOptions)
+        case ("joinchat", 2):
+            return telegramLink("join", [("invite", parts[1])], options, [])
+        case (_, 1) where first.hasPrefix("+") && first.count > 1:
+            return telegramLink("join", [("invite", String(first.dropFirst()))], options, [])
+        case (_, 1) where isTelegramUsername(first):
+            return telegramLink("resolve", [("domain", first)], options, telegramChatOptions)
+        case (_, 2) where isTelegramUsername(first) && isNumber(parts[1]):
+            return telegramLink("resolve", [("domain", first), ("post", parts[1])], options, telegramPostOptions)
+        default:
+            return nil
         }
-        if first == "joinchat", parts.count >= 2 {
-            return make("tg://join", query: [URLQueryItem(name: "invite", value: parts[1])])
-        }
-        if first.hasPrefix("+"), first.count > 1 {
-            return make("tg://join", query: [URLQueryItem(name: "invite", value: String(first.dropFirst()))])
-        }
-        guard first.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }) else { return nil }
-        var query = [URLQueryItem(name: "domain", value: first)]
-        if parts.count >= 2, parts[1].allSatisfy(\.isNumber) {
-            query.append(URLQueryItem(name: "post", value: parts[1]))
-        }
-        return make("tg://resolve", query: query)
     }
+
+    /// `tg://<action>?…` with `fixed` first, then the link's own `options` as they are,
+    /// valueless ones included (`single`); nil if one isn't in `allowed`.
+    static func telegramLink(
+        _ action: String, _ fixed: [(String, String)], _ options: [URLQueryItem], _ allowed: Set<String>
+    ) -> URL? {
+        guard options.allSatisfy({ allowed.contains($0.name) }) else { return nil }
+        var components = URLComponents()
+        components.scheme = "tg"
+        components.host = action
+        components.queryItems = fixed.map { URLQueryItem(name: $0.0, value: $0.1) } + options
+        return components.url
+    }
+
+    static func isNumber(_ part: String) -> Bool {
+        !part.isEmpty && part.allSatisfy(\.isNumber)
+    }
+
+    /// 4–32 letters, digits and underscores, starting with a letter, and not one of the t.me
+    /// paths Telegram keeps for other links.
+    static func isTelegramUsername(_ part: String) -> Bool {
+        guard (4 ... 32).contains(part.count), let head = part.first, head.isLetter, head.isASCII,
+              part.allSatisfy({ ($0.isLetter || $0.isNumber) && $0.isASCII || $0 == "_" })
+        else { return false }
+        return !telegramReservedPaths.contains(part.lowercased())
+    }
+
+    static let telegramReservedPaths: Set = [
+        "addstickers", "addemoji", "addtheme", "addlist", "setlanguage", "share", "msg", "proxy", "socks",
+        "login", "invoice", "boost", "contact", "confirmphone", "giftcode", "joinchat", "iv", "nft",
+    ]
+
+    /// What `tg://resolve` takes for a user, group, channel or bot.
+    static let telegramChatOptions: Set = [
+        "start", "startgroup", "startchannel", "admin", "game", "startapp", "voicechat", "videochat", "livestream",
+    ]
+
+    /// What `tg://resolve` and `tg://privatepost` take with a post.
+    static let telegramPostOptions: Set = ["single", "thread", "comment", "t"]
 
     /// `https://wa.me/15551234567?text=hi` (or api.whatsapp.com/send?phone=…) →
     /// `whatsapp://send?phone=15551234567&text=hi`.

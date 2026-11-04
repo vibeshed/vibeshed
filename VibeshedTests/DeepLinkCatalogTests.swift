@@ -23,10 +23,17 @@ final class DeepLinkCatalogTests: XCTestCase {
 
     func testSlack() {
         XCTAssertEqual(appLink("https://app.slack.com/client/T0123/C0456"), "slack://channel?team=T0123&id=C0456")
-        XCTAssertEqual(appLink("https://app.slack.com/client/T0123/C0456/thread/C0456-1.2"),
-                       "slack://channel?team=T0123&id=C0456")
+        XCTAssertEqual(appLink("https://app.slack.com/client/T0123/D0789"), "slack://channel?team=T0123&id=D0789")
         XCTAssertEqual(appLink("https://app.slack.com/client/T0123"), "slack://open?team=T0123")
         XCTAssertNil(appLink("https://acme.slack.com/archives/C0456/p123"), "no team ID to open it by")
+    }
+
+    /// Slack has no link for these, so they stay in the browser rather than open something else.
+    func testSlackLinksWithoutAnAppForm() {
+        XCTAssertNil(appLink("https://app.slack.com/client/T0123/C0456/thread/C0456-1.2"), "a thread, not its channel")
+        XCTAssertNil(appLink("https://app.slack.com/client/T0123/unreads"), "a view, not a channel ID")
+        XCTAssertNil(appLink("https://app.slack.com/client/T0123/activity-page"))
+        XCTAssertNil(appLink("https://app.slack.com/client/setup"), "not a team ID")
     }
 
     func testWorkspaceApps() {
@@ -59,6 +66,36 @@ final class DeepLinkCatalogTests: XCTestCase {
         XCTAssertEqual(appLink("https://api.whatsapp.com/send?phone=15551234567"),
                        "whatsapp://send?phone=15551234567")
         XCTAssertNil(appLink("https://wa.me/message/ABC"))
+    }
+
+    /// The options Telegram's `tg://` forms take go across under the same names; a valueless
+    /// one (`single`) stays valueless.
+    func testTelegramKeepsTheLinksOptions() {
+        XCTAssertEqual(appLink("https://t.me/MyBot?start=token-1"), "tg://resolve?domain=MyBot&start=token-1")
+        XCTAssertEqual(
+            appLink("https://t.me/MyBot?startgroup=x&admin=pin_messages"),
+            "tg://resolve?domain=MyBot&startgroup=x&admin=pin_messages"
+        )
+        XCTAssertEqual(
+            appLink("https://t.me/durov/42?single&comment=7"), "tg://resolve?domain=durov&post=42&single&comment=7"
+        )
+        XCTAssertEqual(
+            appLink("https://t.me/c/1234/56?thread=9"), "tg://privatepost?channel=1234&post=56&thread=9"
+        )
+    }
+
+    /// Anything the rewrite can't carry over stays in the browser instead of opening something else.
+    func testTelegramLinksWithoutAnAppForm() {
+        XCTAssertNil(appLink("https://t.me/addstickers/MyPack"), "a sticker set, not a user")
+        XCTAssertNil(appLink("https://t.me/share/url?url=https://example.com"))
+        XCTAssertNil(appLink("https://t.me/proxy?server=x&port=1"))
+        XCTAssertNil(appLink("https://t.me/MyBot/myapp?startapp=x"), "a named mini app")
+        XCTAssertNil(appLink("https://t.me/durov?unknown=1"), "an option tg:// may not take")
+        XCTAssertNil(appLink("https://t.me/durov/42/extra"))
+        XCTAssertNil(appLink("https://t.me/c/1234"), "no post")
+        XCTAssertNil(appLink("https://t.me/abc"), "too short for a username")
+        XCTAssertNil(appLink("https://t.me/1durov"), "usernames start with a letter")
+        XCTAssertNil(appLink("https://t.me/+AbCdEf?x=1"))
     }
 
     func testMediaAndStores() {

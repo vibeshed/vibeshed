@@ -77,6 +77,19 @@ final class ShortcutsModuleTests: XCTestCase {
         XCTAssertEqual(results[0].text, "copy me")
     }
 
+    /// What gets copied is what the shortcut gave, unlike the trimmed fields that are shown.
+    func testCopiedTextKeepsItsWhitespace() {
+        let item = Data(#"{"title": "  Snippet  ", "text": "    let x = 1\n"}"#.utf8)
+        let result = ShortcutResultParser.results([item])[0]
+        XCTAssertEqual(result.title, "Snippet")
+        XCTAssertEqual(result.text, "    let x = 1\n")
+        XCTAssertEqual(PickedResult(result), .text("    let x = 1\n"))
+        XCTAssertEqual(PickedResult(optionID: PickedResult(result).optionID(index: 0)), .text("    let x = 1\n"))
+
+        let empty = ShortcutResultParser.results([Data(#"{"title": "T", "text": ""}"#.utf8)])[0]
+        XCTAssertNil(empty.text, "an empty payload is none, so the title is copied")
+    }
+
     func testTextLines() {
         let output = Data("Groceries\n\nhttps://example.com/x\nAgenda:draft\nmailto:a@example.com\n".utf8)
         let results = ShortcutResultParser.results(output)

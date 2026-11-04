@@ -30,7 +30,9 @@ enum ProcessRunner {
     /// `input` goes to the tool's standard input, written in full before the tool starts,
     /// so it has to fit the pipe's buffer. Without it, standard input is empty. A tool still
     /// running after `timeout` is stopped, and the run throws `timedOut`; cancelling the
-    /// calling task stops it too, and throws `CancellationError`.
+    /// calling task stops it too, and throws `CancellationError`. Either answers at once,
+    /// without waiting for the tool to go: it gets SIGTERM, and SIGKILL if it's still there
+    /// after `ProcessControl.killGrace`.
     static func run(
         _ executableURL: URL,
         arguments: [String],
@@ -50,40 +52,33 @@ enum ProcessRunner {
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let gate = ResumeGate(continuation: continuation)
+                control.onStop { gate.resume(with: .failure($0)) }
                 DispatchQueue.global(qos: .userInitiated).async {
                     do {
-                        guard try control.launch() else {
-                            gate.resume(with: .failure(CancellationError()))
-                            return
-                        }
+                        // Stopped before it started: `onStop` has answered already.
+                        guard try control.launch() else { return }
                     } catch {
                         gate.resume(with: .failure(error))
                         return
                     }
                     let timeoutWorkItem = timeout.map { seconds in
-                        let item = DispatchWorkItem {
-                            gate.resume(with: .failure(RunError.timedOut(seconds)))
-                            control.stop()
-                        }
+                        let item = DispatchWorkItem { control.stop(because: RunError.timedOut(seconds)) }
                         DispatchQueue.global().asyncAfter(deadline: .now() + seconds, execute: item)
                         return item
                     }
 
+                    // After a stop this thread still drains and reaps the tool, but nobody is
+                    // waiting on it: the stop answered, and the gate ignores this answer.
                     let (outputData, errorData) = drain(stdoutPipe, stderrPipe)
                     process.waitUntilExit()
                     timeoutWorkItem?.cancel()
-
-                    if control.wasStopped {
-                        gate.resume(with: .failure(CancellationError()))
-                    } else {
-                        gate.resume(with: .success(
-                            Output(status: process.terminationStatus, stdout: outputData, stderr: errorData)
-                        ))
-                    }
+                    gate.resume(with: .success(
+                        Output(status: process.terminationStatus, stdout: outputData, stderr: errorData)
+                    ))
                 }
             }
         } onCancel: {
-            control.stop()
+            control.stop(because: CancellationError())
         }
     }
 
@@ -126,35 +121,61 @@ enum ProcessRunner {
 /// Starts and stops one process from any thread. `terminate()` on a process that never
 /// launched raises an exception, so a stop that comes first only keeps it from launching.
 private final class ProcessControl: @unchecked Sendable {
+    /// How long a stopped tool has to exit on SIGTERM before it gets SIGKILL.
+    static let killGrace: TimeInterval = 1
+
     private let lock = NSLock()
     private let process: Process
     private var launched = false
-    private var stopped = false
+    private var stopReason: Error?
+    private var answerStop: ((Error) -> Void)?
 
     init(_ process: Process) {
         self.process = process
     }
 
-    var wasStopped: Bool {
-        lock.withLock { stopped }
+    /// `answer` gets the reason of the first stop, right away if the run was stopped already.
+    func onStop(_ answer: @escaping (Error) -> Void) {
+        let reason: Error? = lock.withLock {
+            if stopReason == nil {
+                answerStop = answer
+            }
+            return stopReason
+        }
+        if let reason {
+            answer(reason)
+        }
     }
 
     /// Launches the process unless it was stopped already; false if it was.
     func launch() throws -> Bool {
         try lock.withLock {
-            guard !stopped else { return false }
+            guard stopReason == nil else { return false }
             try process.run()
             launched = true
             return true
         }
     }
 
-    func stop() {
-        lock.withLock {
-            stopped = true
+    /// Answers the run with `reason` and stops the process: SIGTERM now, SIGKILL if it's
+    /// still running `killGrace` later. Only the first stop counts.
+    func stop(because reason: Error) {
+        let answer: ((Error) -> Void)? = lock.withLock {
+            guard stopReason == nil else { return nil }
+            stopReason = reason
             if launched, process.isRunning {
                 process.terminate()
+                let process = process
+                let pid = process.processIdentifier
+                DispatchQueue.global().asyncAfter(deadline: .now() + Self.killGrace) {
+                    if process.isRunning {
+                        kill(pid, SIGKILL)
+                    }
+                }
             }
+            defer { answerStop = nil }
+            return answerStop
         }
+        answer?(reason)
     }
 }
