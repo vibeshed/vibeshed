@@ -179,6 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 MeetingPrepModule(),
                 BookmarkModule(),
                 SafariModule(),
+                RecentFilesModule(),
                 NotesModule(),
                 TimerModule(),
                 MathModule(),

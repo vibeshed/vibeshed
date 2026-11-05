@@ -825,6 +825,17 @@ modules:
     showCloudTabs: true        # iCloud Tabs as main-search rows
     # enabledActions: [searchHistory, searchFavorites, searchCloudTabs, history, favorite, cloudTab]
 
+  # --- Recent Files ---
+  # Search Recent Files, plus the recent files matching what you type in the main
+  # search: what Finder lists under Recents, from the same Spotlight search. No
+  # permission needed. Spotlight only counts files opened through Finder, `open` or an
+  # app's Open dialog, so one opened from inside an editor or a terminal may be missing.
+  # Files open in their default apps.
+  recentFiles:
+    fileResults: 8             # recent files in the main search, for 3+ letters (0 = none)
+    excludedFolders: []        # e.g. ["~/Downloads"]; subfolders too
+    # enabledActions: [searchFiles, file]
+
   # --- Apple Notes ---
   # Search Notes (titles and text), New Note, and your latest notes in the main search.
   # Scripts Notes, so macOS asks once to let Vibeshed control it. The main search lists
