@@ -340,7 +340,10 @@ private extension ConfigDecodingCoverageTests {
 
     func changedThemeConfig() throws -> ThemeConfig {
         var config = ThemeConfig()
-        config.themes = [ThemeDefinition(name: "t", pair: "p", keywords: ["k"])]
+        config.themes = [ThemeDefinition(
+            name: "t", pair: "p", keywords: ["k"], macosGlass: "0.5", macosIconStyle: "tinted",
+            macosMenuBarBackground: .show
+        )]
         config.includeBuiltInThemes = false
         config.themesDirectory = "/t"
         config.targets = ["wallpaper"]

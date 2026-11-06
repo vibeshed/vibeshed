@@ -116,6 +116,7 @@ actor ThemeModule: ModuleConfigurable {
                 let known = MacAccentColor.allCases.map(\.rawValue).joined(separator: ", ")
                 errors.append("Theme '\(theme.name)': macosAccent must be one of \(known)")
             }
+            // macosGlass / macosIconStyle are checked with the palette below (`MacStyle`).
         }
         // Palette completeness (after `base` inheritance) for the themes config defines.
         let configNames = Set(config.themes.map(\.name))
@@ -243,6 +244,8 @@ actor ThemeModule: ModuleConfigurable {
         // Kept across launches, so the generated theme stays in the list.
         UserDefaults.standard.set(colors, forKey: Self.generatedDefaultsKey)
         UserDefaults.standard.set(current.url.path, forKey: Self.generatedDefaultsKey + ".wallpaper")
+        let style = ThemeGenerator.macStyle(fromWallpaper: current.url, dark: current.dark)
+        UserDefaults.standard.set(style?.stored, forKey: Self.generatedDefaultsKey + ".macos")
         rebuildCatalog()
         await eventBus?.publish(.moduleActionsChanged(moduleID: id))
         return await apply(slug: ResolvedTheme.slug(for: ThemeGenerator.generatedName))
@@ -256,14 +259,18 @@ actor ThemeModule: ModuleConfigurable {
     }
 
     private func storedGeneratedTheme() -> ThemeDefinition? {
-        guard let colors = UserDefaults.standard.dictionary(forKey: Self.generatedDefaultsKey) as? [String: String]
+        let defaults = UserDefaults.standard
+        guard let colors = defaults.dictionary(forKey: Self.generatedDefaultsKey) as? [String: String]
         else { return nil }
+        // Themes generated before the style existed have none: they leave the settings alone.
+        let style = (defaults.dictionary(forKey: Self.generatedDefaultsKey + ".macos") as? [String: String])
+            .map(MacStyle.init(stored:)) ?? MacStyle()
         return ThemeDefinition(
             name: ThemeGenerator.generatedName, colors: colors,
-            wallpaper: UserDefaults.standard.string(forKey: Self.generatedDefaultsKey + ".wallpaper"),
+            wallpaper: defaults.string(forKey: Self.generatedDefaultsKey + ".wallpaper"),
             icon: "wand.and.stars", subtitle: "Last palette made by Generate Theme from Wallpaper",
             keywords: ["wallpaper", "generate", "aether"]
-        )
+        ).with(style)
     }
 
     /// Stay quiet on success — the desktop changing is the feedback. Surface failures.

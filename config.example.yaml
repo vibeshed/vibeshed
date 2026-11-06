@@ -487,7 +487,8 @@ modules:
 
   # --- Theme ---
   # Palette themes applied across macOS and apps in one go: appearance, accent +
-  # text highlight, folder color, pointer, wallpaper, the Vibeshed picker, iTerm, Ghostty,
+  # text highlight, folder color, icon style, Liquid Glass, menu bar background, pointer,
+  # wallpaper, the Vibeshed picker, iTerm, Ghostty,
   # Terminal, VS Code/Cursor/Windsurf, Zed, JetBrains, Neovim, Claude Code, plus your own templates.
   #   theme/switch        browse themes; each previews live as you move, Return applies, Esc reverts
   #   theme/apply.<slug>  apply one directly (e.g. theme/apply.tokyo-night — bind it or alias it)
@@ -511,8 +512,12 @@ modules:
     # wallpaperGrain: true            # fine film grain on generated wallpapers
 
     # What a theme is applied to (default: all but github, which changes an account setting):
-    # targets: [appearance, accent, folders, pointer, wallpaper, iterm, ghostty, terminal, vscode,
-    #           zed, jetbrains, neovim, claude, bat, lsd, micro, btop, github, templates, hooks]
+    # targets: [appearance, accent, folders, icons, glass, menubar, pointer, wallpaper, iterm, ghostty,
+    #           terminal, vscode, zed, jetbrains, neovim, claude, bat, lsd, micro, btop, github,
+    #           templates, hooks]
+    # icons/glass/menubar change only for themes that set them (classic desktops, a few
+    # Omarchy palettes, generated-from-wallpaper themes, your own); other themes give you
+    # back your own setting, unless you've changed it yourself since a theme did.
     # ghostty writes ~/.config/ghostty/themes/Vibeshed, sets `theme = Vibeshed` in Ghostty's config
     # and reloads open terminals (Ghostty 1.2+). Colors your Ghostty config sets itself
     # (background, palette, …) still override the theme's.
@@ -553,6 +558,9 @@ modules:
     #       pointer_fill: "#ff9e64"     # optional extras: pointer_fill, pointer_outline, folder, highlight
     #     wallpaper: "~/Pictures/Walls/midnight"   # image, or a folder (first image is used)
     #     macosAccent: "Orange"                     # default: nearest to the accent color
+    #     macosGlass: "clear"                       # Liquid Glass: clear, tinted, or 0–1 (macOS 27)
+    #     macosIconStyle: "tinted"                  # default, dark, auto, clear, tinted, clear-dark, …
+    #     macosMenuBarBackground: true              # (these three default to your own settings)
     #     apps:                                     # use existing app themes instead of generated ones
     #       vscode: "Tokyo Night"
     #       jetbrains: "_@user_Tokyo Night"

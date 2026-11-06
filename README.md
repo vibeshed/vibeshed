@@ -183,6 +183,9 @@ Themes that come as a light/dark pair (Catppuccin Latte and Mocha, Tokyo Night D
 | `appearance` | Light/dark mode, and Auto appearance as above | ✓ |
 | `accent` | Accent (nearest preset) + text highlight (exact color) | ✓ |
 | `folders` | "Icon, widget & folder color" (macOS 26+), tinted icons for listed folders | ✓ |
+| `icons` | Icon & widget style: default, dark, clear or tinted (macOS 26+) | ✓ |
+| `glass` | Liquid Glass tint, clear to tinted (macOS 27) | ✓ |
+| `menubar` | "Show menu bar background" (macOS 26+) | ✓ |
 | `pointer` | Pointer fill/outline (needs Full Disk Access) | best-effort |
 | `wallpaper` | Theme image, or one generated from the palette in one of 45 styles | ✓ |
 | `iterm` | Every open session, plus a "Vibeshed" profile (your default profile's settings, theme colours) made the default, so new windows and restarts keep the theme | ✓ |
@@ -199,6 +202,8 @@ Themes that come as a light/dark pair (Catppuccin Latte and Mocha, Tokyo Night D
 | `templates` / `hooks` | Your own `{{ key }}` templates and shell commands | ✓ |
 
 \* The very first time the generated theme is installed, the editor may need one reload to discover it; after that, switches apply live.
+
+`icons`, `glass` and `menubar` only change anything for themes with an opinion: the classic desktops (BeOS, Mac OS 9, Windows 95, …) show a menu bar background and fully tinted glass, as their solid chrome did; colorless palettes (Vantablack, White, Solitude) use clear icons; one-hue palettes (Hackerman, Lumon, Matte Black, Osaka Jade) tint the icons in their accent. `theme/fromWallpaper` picks them from the picture: a menu bar background when the strip under the menu bar is busy, glass tinted in step with how busy the whole picture is, and tinted icons when it's essentially one hue. Every other theme gives you back your own settings, unless you changed one yourself after a theme did. Set them per theme with `macosGlass` (`clear`, `tinted` or 0–1), `macosIconStyle` (`default`, `dark`, `clear`, `tinted`, `clear-dark`, …) and `macosMenuBarBackground` (`true`/`false`). They go through the same private macOS calls System Settings makes (SkyLight, and AppKit's Liquid Glass setting), so a future macOS can change them; each is read back after it's set, and skipped where it isn't available.
 
 The picker and the window focus border follow the theme's accent too. Terminal tools that use the 16 ANSI colours (e.g. fzf with `--color=hl:4,…`) need no target at all: they follow the terminal palette (iTerm, Ghostty) live. For bat, select the generated theme once with `--theme=Vibeshed`; for Neovim, with `vim.cmd.colorscheme("vibeshed")` (or LazyVim's `opts = { colorscheme = "vibeshed" }`).
 

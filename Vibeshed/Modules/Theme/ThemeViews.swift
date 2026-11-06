@@ -21,6 +21,11 @@ struct ThemePreviewView: View {
                 Text(ThemeModule.describe(theme))
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                if let style = theme.macStyle.summary {
+                    Label(style, systemImage: "macbook")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             DesktopPreview(palette: palette, wallpaper: wallpaper)

@@ -119,6 +119,14 @@ struct ThemeDefinition: Codable, Sendable, Equatable {
     /// macOS accent color name (Blue, Purple, Pink, Red, Orange, Yellow, Green, Graphite,
     /// Multicolor). Default: the named color nearest the palette's accent hue.
     var macosAccent: String?
+    /// Liquid Glass (macOS 27): `clear`, `tinted`, or a tint amount from 0 to 1.
+    /// Default: whatever you have set yourself.
+    var macosGlass: String?
+    /// Icon & widget style (macOS 26+): `default`, `dark`, `auto`, `clear`, `tinted`, or
+    /// `clear-light` … `tinted-dark`. Default: whatever you have set yourself.
+    var macosIconStyle: String?
+    /// "Show menu bar background" (macOS 26+). Default: whatever you have set yourself.
+    var macosMenuBarBackground: MenuBarBackground?
     /// Use an existing app theme instead of generating one, by target id:
     /// `vscode`, `zed`, `jetbrains`, `iterm`, `ghostty`, `terminal`, `neovim`, `claude`, `github`.
     var apps: [String: String] = [:]
@@ -135,6 +143,9 @@ struct ThemeDefinition: Codable, Sendable, Equatable {
         subtitle: String? = nil,
         keywords: [String] = [],
         macosAccent: String? = nil,
+        macosGlass: String? = nil,
+        macosIconStyle: String? = nil,
+        macosMenuBarBackground: MenuBarBackground? = nil,
         apps: [String: String] = [:]
     ) {
         self.name = name
@@ -148,6 +159,9 @@ struct ThemeDefinition: Codable, Sendable, Equatable {
         self.subtitle = subtitle
         self.keywords = keywords
         self.macosAccent = macosAccent
+        self.macosGlass = macosGlass
+        self.macosIconStyle = macosIconStyle
+        self.macosMenuBarBackground = macosMenuBarBackground
         self.apps = apps
     }
 
@@ -164,6 +178,11 @@ struct ThemeDefinition: Codable, Sendable, Equatable {
         subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
         keywords = try container.decodeIfPresent([String].self, forKey: .keywords) ?? []
         macosAccent = try container.decodeIfPresent(String.self, forKey: .macosAccent)
+        macosGlass = try container.decodeIfPresent(String.self, forKey: .macosGlass)
+        macosIconStyle = try container.decodeIfPresent(String.self, forKey: .macosIconStyle)
+        macosMenuBarBackground = try container.decodeIfPresent(
+            MenuBarBackground.self, forKey: .macosMenuBarBackground
+        )
         apps = try container.decodeIfPresent([String: String].self, forKey: .apps) ?? [:]
     }
 }
@@ -193,6 +212,9 @@ enum ThemeTargetID: String, CaseIterable, Sendable {
     case appearance
     case accent
     case folders
+    case icons
+    case glass
+    case menubar
     case pointer
     case wallpaper
     case iterm
