@@ -72,8 +72,17 @@ enum ClipboardManager {
         NSPasteboard.general.setString(content, forType: .string)
     }
 
+    /// Sends ⌘V to the app the user is in, once the picker has let go of keyboard focus
+    /// (see `PickerKeyFocus`) — a ⌘V posted while it is still key pastes into its
+    /// search field. Skipped if the picker keeps focus.
     @MainActor
-    static func pasteFromPasteboard() {
+    static func pasteFromPasteboard() async {
+        let start = ContinuousClock.now
+        guard await PickerKeyFocus.shared.waitUntilReleased() else {
+            log.warning("Picker kept keyboard focus; skipped paste")
+            return
+        }
+        log.debug("Pasting (waited \(start.duration(to: .now), privacy: .public) for the picker)")
         // keyCode 9 = 'v'
         guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: true),
               let keyUp = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: false)
