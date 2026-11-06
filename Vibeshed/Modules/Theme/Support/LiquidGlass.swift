@@ -68,8 +68,7 @@ enum LiquidGlass {
 
     static func current() -> Setting? {
         guard isSupported, let symbol = appKitSymbol(getSymbol) else { return nil }
-        let returned = unsafeBitCast(symbol, to: GetFunction.self)()
-        let bytes = withUnsafeBytes(of: returned) { Array($0.prefix(5)) }
+        let bytes = callGetter(symbol)
         // A case byte other than 0 or 1 means the layout isn't the one described above.
         return bytes[4] <= 1 ? Setting(bytes: bytes) : nil
     }
@@ -79,10 +78,23 @@ enum LiquidGlass {
         guard isSupported, current() != nil, let symbol = appKitSymbol(setSymbol) else { return false }
         // `Legibility?`: the enum's five bytes, then 0 for `.some`.
         let argument = setting.bytes + [0, 0, 0]
-        argument.withUnsafeBytes { buffer in
-            unsafeBitCast(symbol, to: SetFunction.self)(buffer.baseAddress!) {}
-        }
+        argument.withUnsafeBytes { callSetter(symbol, $0.baseAddress!) }
         return current() == setting
+    }
+
+    // The raw calls stay out of the optimizer: at -O, Swift 6.3 and 6.4 specialize a call
+    // through a thin function pointer with an indirect result into IR they crash on
+    // (signal 11 in `emitCastToSubstSchema`). Unoptimized, this is what debug builds run.
+
+    @inline(never) @_optimize(none)
+    private static func callGetter(_ symbol: UnsafeMutableRawPointer) -> [UInt8] {
+        let returned = unsafeBitCast(symbol, to: GetFunction.self)()
+        return withUnsafeBytes(of: returned) { Array($0.prefix(5)) }
+    }
+
+    @inline(never) @_optimize(none)
+    private static func callSetter(_ symbol: UnsafeMutableRawPointer, _ argument: UnsafeRawPointer) {
+        unsafeBitCast(symbol, to: SetFunction.self)(argument) {}
     }
 
     /// Whether Reduce Transparency is on, which hides the glass and so the setting.
