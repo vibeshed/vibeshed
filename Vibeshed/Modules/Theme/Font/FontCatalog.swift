@@ -114,7 +114,8 @@ enum FontCatalog {
         return nil
     }
 
-    /// Every font family registered with the system, fonts installed since launch included.
+    /// Every font family registered with the system, fonts installed since launch included
+    /// once fontd has them (see `FontActivation` for when it doesn't on its own).
     static func installedFamilies() -> Set<String> {
         Set(CTFontManagerCopyAvailableFontFamilyNames() as? [String] ?? [])
     }

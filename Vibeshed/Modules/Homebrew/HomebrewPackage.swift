@@ -32,6 +32,8 @@ struct HomebrewPackage: Sendable, Equatable {
     let conflicts: [String]
     /// Where the cask's `app` artifacts install, e.g. `/Applications/Firefox.app`.
     let appPaths: [String]
+    /// Where the cask's `font` artifacts install, e.g. `~/Library/Fonts/FiraCode-Bold.ttf`.
+    let fontPaths: [String]
     let caveats: String?
     let tap: String?
     let deprecation: Notice?
@@ -100,6 +102,7 @@ extension HomebrewPackage {
             dependencies: json["dependencies"] as? [String] ?? [],
             conflicts: json["conflicts_with"] as? [String] ?? [],
             appPaths: [],
+            fontPaths: [],
             caveats: nonEmpty(json["caveats"]),
             tap: nonEmpty(json["tap"]),
             deprecation: notice(in: json, flag: "deprecated", prefix: "deprecation"),
@@ -127,15 +130,21 @@ extension HomebrewPackage {
             license: nil,
             dependencies: [],
             conflicts: (json["conflicts_with"] as? [String: Any])?["cask"] as? [String] ?? [],
-            appPaths: artifacts.compactMap { artifact in
-                guard artifact["app"] != nil else { return nil }
-                return artifact["target"] as? String
-            },
+            appPaths: targets(of: "app", in: artifacts),
+            fontPaths: targets(of: "font", in: artifacts),
             caveats: nonEmpty(json["caveats"]),
             tap: nonEmpty(json["tap"]),
             deprecation: notice(in: json, flag: "deprecated", prefix: "deprecation"),
             disabling: notice(in: json, flag: "disabled", prefix: "disable")
         )
+    }
+
+    /// Where a cask's artifacts of `kind` (`app`, `font`) install.
+    private static func targets(of kind: String, in artifacts: [[String: Any]]) -> [String] {
+        artifacts.compactMap { artifact in
+            guard artifact[kind] != nil else { return nil }
+            return artifact["target"] as? String
+        }
     }
 
     private static func notice(in json: [String: Any], flag: String, prefix: String) -> Notice? {
