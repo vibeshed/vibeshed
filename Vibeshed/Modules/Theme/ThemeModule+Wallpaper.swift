@@ -121,8 +121,8 @@ extension ResolvedTheme {
     func generatingWallpaper() -> ResolvedTheme {
         ResolvedTheme(
             name: name, slug: slug, palette: palette, wallpaper: nil, wallpaperStyle: wallpaperStyle, icon: icon,
-            subtitle: subtitle, keywords: keywords, macosAccent: macosAccent, appOverrides: appOverrides,
-            source: source
+            subtitle: subtitle, keywords: keywords, macosAccent: macosAccent, macStyle: macStyle,
+            appOverrides: appOverrides, source: source
         )
     }
 }

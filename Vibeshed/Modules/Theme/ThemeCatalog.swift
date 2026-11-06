@@ -20,6 +20,8 @@ struct ResolvedTheme: Sendable, Equatable, Identifiable {
     let subtitle: String?
     let keywords: [String]
     let macosAccent: String?
+    /// Liquid Glass, icon style and menu bar background, where the theme has an opinion.
+    var macStyle = MacStyle()
     let appOverrides: [String: String]
     let source: Source
     /// Slugs of the opposite-mode themes this one switches to when the system does; empty
@@ -177,6 +179,9 @@ enum ThemeCatalog {
         merged.wallpaperStyle = definition.wallpaperStyle ?? base.wallpaperStyle
         merged.icon = definition.icon ?? base.icon
         merged.macosAccent = definition.macosAccent ?? base.macosAccent
+        merged.macosGlass = definition.macosGlass ?? base.macosGlass
+        merged.macosIconStyle = definition.macosIconStyle ?? base.macosIconStyle
+        merged.macosMenuBarBackground = definition.macosMenuBarBackground ?? base.macosMenuBarBackground
         merged.apps = base.apps.merging(definition.apps) { _, own in own }
         return merged
     }
@@ -197,6 +202,7 @@ enum ThemeCatalog {
             subtitle: definition.subtitle,
             keywords: definition.keywords,
             macosAccent: definition.macosAccent,
+            macStyle: try MacStyle(definition),
             appOverrides: definition.apps,
             source: source
         )

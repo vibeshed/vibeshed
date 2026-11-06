@@ -82,6 +82,86 @@ enum ThemeGenerator {
         return raw
     }
 
+    // MARK: - System settings
+
+    /// The System Settings that suit the wallpaper at `url` as it looks in the current
+    /// appearance (see `macStyle(from:)`).
+    static func macStyle(fromWallpaper url: URL, dark: Bool) -> MacStyle? {
+        DynamicDesktop.thumbnail(of: url, dark: dark, maxPixelSize: 512).flatMap { macStyle(from: $0.image) }
+    }
+
+    /// System Settings that suit the picture:
+    /// - a menu bar background when the strip under the menu bar is busy enough to fight
+    ///   its text: light and dark parts side by side, or fine texture;
+    /// - Liquid Glass tinted in step with how busy the whole picture is, so calm gradients
+    ///   keep clear glass and photos get enough tint to read over;
+    /// - icons tinted (in the accent, through the folder color) when the picture is
+    ///   essentially one vivid hue; otherwise your own icon style.
+    /// Thresholds come from macOS's own wallpapers: hello, Sonoma or Monterey leave a calm
+    /// strip and clear glass, while Motion, Grid, Catalina Rock or Big Sur Waters Edge get
+    /// a background and the most tint; the iMac and dark hello pictures read as one hue.
+    static func macStyle(from image: CGImage) -> MacStyle? {
+        guard let samples = sample(image) else { return nil }
+        let size = sampleSize
+        let lightness = samples.map(\.lightness)
+
+        let texture = meanStep(lightness, width: size, rows: 0 ..< size, vertical: true)
+        let stripRows = 0 ..< 4 // ~4% of the height, top first
+        let strip = Array(lightness[0 ..< stripRows.count * size])
+        let stripTexture = meanStep(lightness, width: size, rows: stripRows, vertical: false)
+        let stripBusy = standardDeviation(strip) >= 0.15 || stripTexture >= 0.04
+
+        let tint = min(max((texture - 0.01) / 0.05, 0), 1) * 0.75
+        let vivid = samples.filter { $0.saturation > 0.25 && $0.lightness > 0.15 && $0.lightness < 0.9 }
+        let oneHue = Double(vivid.count) >= Double(samples.count) * 0.5 && hueConcentration(vivid) >= 0.97
+        return MacStyle(
+            glass: (tint * 20).rounded() / 20,
+            iconStyle: oneHue ? IconStyle(.tinted) : nil,
+            menuBarBackground: stripBusy ? .show : .hide
+        )
+    }
+
+    /// The mean lightness step between neighbouring samples in `rows` (row-major, top
+    /// first): about 0.01 for a smooth gradient, 0.06 and up for streaks or a rocky photo.
+    private static func meanStep(_ lightness: [Double], width: Int, rows: Range<Int>, vertical: Bool) -> Double {
+        var total = 0.0
+        var count = 0
+        for row in rows {
+            for column in 0 ..< width {
+                let index = row * width + column
+                if column + 1 < width {
+                    total += abs(lightness[index] - lightness[index + 1])
+                    count += 1
+                }
+                if vertical, row + 1 < rows.upperBound {
+                    total += abs(lightness[index] - lightness[index + width])
+                    count += 1
+                }
+            }
+        }
+        return count > 0 ? total / Double(count) : 0
+    }
+
+    private static func standardDeviation(_ values: [Double]) -> Double {
+        guard !values.isEmpty else { return 0 }
+        let mean = values.reduce(0, +) / Double(values.count)
+        return (values.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(values.count)).squareRoot()
+    }
+
+    /// How tightly the samples' hues gather, weighted by saturation: 1 is a single hue.
+    private static func hueConcentration(_ samples: [Sample]) -> Double {
+        var sinSum = 0.0
+        var cosSum = 0.0
+        var weight = 0.0
+        for sample in samples {
+            let radians = sample.hue * .pi / 180
+            sinSum += sin(radians) * sample.saturation
+            cosSum += cos(radians) * sample.saturation
+            weight += sample.saturation
+        }
+        return weight > 0 ? (sinSum * sinSum + cosSum * cosSum).squareRoot() / weight : 0
+    }
+
     // MARK: - Sampling
 
     /// Fine enough that thin highlights (a glow's rim) survive the downsampling.

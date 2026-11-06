@@ -31,7 +31,10 @@ final class VintageWallpaperTests: XCTestCase {
         XCTAssertEqual(styles, [.clouds, .azul, .boing, .boing, .rain])
         for theme in BuiltInThemes.vintage {
             XCTAssertNoThrow(try ThemePalette.resolve(theme.colors, mode: theme.mode), theme.name)
-            XCTAssertTrue(BuiltInThemes.all.contains(theme), theme.name)
+            // Listed as shipped: with the macOS settings classic desktops get (menu bar
+            // background, tinted glass).
+            XCTAssertTrue(BuiltInThemes.all.contains(BuiltInThemes.withMacStyle(theme)), theme.name)
+            XCTAssertFalse(BuiltInThemes.macStyles[theme.name]?.isEmpty ?? true, theme.name)
         }
     }
 
