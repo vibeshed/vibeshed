@@ -48,6 +48,7 @@ A keyboard-driven macOS launcher built with SwiftUI. Control your Mac with keyst
 - Search and switch browser tabs across Safari and Chromium browsers
 - Browser bookmarks and most-visited sites
 - Safari history, Favorites and iCloud Tabs from your other devices
+- Files from Finder's Recents, opened in their default apps
 - Default browser with per-URL routing to specific browsers/profiles
 
 **Productivity**
@@ -141,6 +142,7 @@ The app watches the config file for changes and hot-reloads automatically.
 | **Browser** | Search/focus/close tabs in Safari and Chromium browsers |
 | **Bookmark** | Browser bookmarks and most-visited URLs |
 | **Safari** | Search Safari history, Favorites and iCloud Tabs on your other devices |
+| **Recent Files** | Search the files in Finder's Recents and open them in their default apps |
 | **Clipboard** | Clipboard history with search, paste, and persistence |
 | **Audio** | Volume, mute, device selection, media key control |
 | **System** | Lock, sleep, restart, shutdown, appearance, screenshots |

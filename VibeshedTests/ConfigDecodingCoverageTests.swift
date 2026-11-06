@@ -136,6 +136,11 @@ final class ConfigDecodingCoverageTests: XCTestCase {
             $0.showCloudTabs = false
             $0.enabledActions = ["x"]
         })
+        try assertRoundTrip(changed(RecentFilesConfig()) {
+            $0.fileResults = 1
+            $0.excludedFolders = ["~/x"]
+            $0.enabledActions = ["x"]
+        })
         try assertRoundTrip(changed(MenuConfig()) {
             $0.showInSearch = false
             $0.maxSubmenuItems = 1
@@ -274,6 +279,7 @@ private extension ConfigDecodingCoverageTests {
             "meetingPrep": ModuleSection(MeetingPrepModule.self),
             "bookmark": ModuleSection(BookmarkModule.self),
             "safari": ModuleSection(SafariModule.self),
+            "recentFiles": ModuleSection(RecentFilesModule.self),
             "notes": ModuleSection(NotesModule.self),
             "timer": ModuleSection(TimerModule.self),
             "math": ModuleSection(MathModule.self),
