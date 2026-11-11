@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 """Generates the website's data from the source, so the page never drifts from the app:
-  docs/themes.json   every built-in palette (for the theme chips and press-T), plus counts
-  docs/index.html    the numbers in elements marked data-stat="modules|themes|wallpapers|fonts",
-                     and the module list between <!-- modules:start --> and <!-- modules:end -->
+  docs/themes.json   every built-in palette (for the theme chips and press-T)
+  docs/index.html    the module list between <!-- modules:start --> and <!-- modules:end -->
 
-Counts come from:
+Sources:
   themes      Vibeshed/Modules/Theme/BuiltInThemes*.swift (one ThemeDefinition each)
-  wallpapers  the cases of WallpaperStyle
-  fonts       FontCatalog.curated
   modules     the Modules table in README.md
 
 Run from the repo root:  python3 scripts/generate-site-data.py
@@ -83,19 +80,6 @@ def theme_entry(name, mode, c):
     return entry
 
 
-def count_wallpapers():
-    text = read(f"{THEME_DIR}/Wallpaper/WallpaperStyle.swift")
-    enum = text[text.index("enum WallpaperStyle") : text.index("static let automatic")]
-    return sum(len(line.split("case", 1)[1].split(",")) for line in enum.splitlines() if line.strip().startswith("case "))
-
-
-def count_fonts():
-    text = read(f"{THEME_DIR}/Font/FontCatalog.swift")
-    start = text.index("static let curated")
-    curated = block_at(text, text.index("[", text.index("=", start)))
-    return len(re.findall(r"^\s+(?:FontDefinition\(|monaspace\()", curated, re.M))
-
-
 def modules():
     """(name, description) for each row of the README's Modules table."""
     readme = read("README.md")
@@ -115,20 +99,12 @@ def main():
     module_rows = modules()
     # Alphabetical, like BuiltInThemes.all (localizedStandardCompare is close enough to casefold here).
     found.sort(key=lambda t: t[0].casefold())
-    stats = {
-        "modules": len(module_rows),
-        "themes": len(found),
-        "wallpapers": count_wallpapers(),
-        "fonts": count_fonts(),
-    }
-    data = {"stats": stats, "themes": [theme_entry(*t) for t in found]}
+    data = {"themes": [theme_entry(*t) for t in found]}
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
         f.write("\n")
 
     page = read(INDEX)
-    for key, value in stats.items():
-        page = re.sub(rf'(data-stat="{key}"[^>]*>)[^<]*(<)', rf"\g<1>{value}\g<2>", page)
     page = re.sub(
         r"(<!-- modules:start[^>]*-->).*?(\s*<!-- modules:end -->)",
         lambda m: m.group(1) + "\n      " + modules_html(module_rows) + m.group(2),
@@ -137,7 +113,7 @@ def main():
     )
     with open(INDEX, "w", encoding="utf-8") as f:
         f.write(page)
-    print(f"{OUT}: {len(found)} themes; stats {stats}")
+    print(f"{OUT}: {len(found)} themes; {INDEX}: {len(module_rows)} modules")
 
 
 if __name__ == "__main__":
