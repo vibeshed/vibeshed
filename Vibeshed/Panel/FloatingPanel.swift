@@ -14,6 +14,9 @@ final class FloatingPanel: NSPanel {
     /// Called when the show animation finishes. Used to defer heavy work.
     var onShowAnimationComplete: (() -> Void)?
 
+    /// Called with `true` when the panel becomes key and `false` when it resigns key.
+    var onKeyStatusChange: ((Bool) -> Void)?
+
     /// Whether we're currently running a hide/dismiss animation (prevents re-entrancy).
     private var isHiding = false
 
@@ -79,8 +82,14 @@ final class FloatingPanel: NSPanel {
         false
     }
 
+    override func becomeKey() {
+        super.becomeKey()
+        onKeyStatusChange?(true)
+    }
+
     override func resignKey() {
         super.resignKey()
+        onKeyStatusChange?(false)
         if staysOpenOnResignKey { return }
         if holdsKeyFocus, !isHiding, keyFocusReclaimer.shouldReclaim() {
             // Once the new key window has settled. Vibeshed's own windows (an alert) keep it.
