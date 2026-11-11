@@ -172,9 +172,7 @@ actor HomebrewModule: ModuleConfigurable {
                 guard let name = values["package"], !name.isEmpty else {
                     return .showResult(title: "Error", body: "No cask specified")
                 }
-                let output = try await HomebrewManager.uninstallCask(name, brewPath: brewPath)
-                await self.invalidatePackageCache()
-                return .showResult(title: "Uninstalled \(name)", body: output)
+                return try await self.uninstall(cask: name, brewPath: brewPath)
             },
         ]
     }

@@ -1,7 +1,7 @@
 import Foundation
 
-/// The install actions' work. Installing something a Vibeshed module works with
-/// (Spotify, iTerm, `gh`, …) also turns that module on in config.yaml.
+/// The install actions' work, and the cask uninstall's. Installing something a Vibeshed
+/// module works with (Spotify, iTerm, `gh`, …) also turns that module on in config.yaml.
 extension HomebrewModule {
     func install(formula name: String, brewPath: String) async throws -> ActionResult {
         let before = SoftwareIntegration.detectedModuleIDs()
@@ -18,14 +18,47 @@ extension HomebrewModule {
             HomebrewManager.installCask(name, brewPath: brewPath)
         )
         invalidatePackageCache()
-        // The install already succeeded; a failed app lookup or launch shouldn't turn it into an error.
-        let appPaths = await (try? HomebrewManager.caskAppPaths(name, brewPath: brewPath)) ?? []
+        // The install already succeeded; a failed lookup or launch shouldn't turn it into an error.
+        let cask = try? await HomebrewManager.cask(name, brewPath: brewPath)
+        await activateFonts(cask?.fontPaths ?? [])
+        let appPaths = cask?.appPaths ?? []
         let enabled = await enableModulesForInstall(since: before, appPaths: appPaths)
         let launched = await HomebrewManager.launchFirstApp(at: appPaths).map { path in
             "Launched " + URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
         }
         let lines = [launched, enabled, summary].compactMap(\.self)
         return .showResult(title: "Installed \(name)", body: lines.joined(separator: "\n"))
+    }
+
+    func uninstall(cask name: String, brewPath: String) async throws -> ActionResult {
+        // Fonts `activateFonts` registered would stay listed after their files are gone,
+        // and CoreText can only unregister them while the files are there.
+        let cask = try? await HomebrewManager.cask(name, brewPath: brewPath)
+        let unregistered = await FontActivation.deactivate(cask?.fontPaths ?? [])
+        if !unregistered.isEmpty {
+            log.info("Unregistered \(unregistered.count) font files before uninstalling \(name, privacy: .public)")
+        }
+        let output: String
+        do {
+            output = try await HomebrewManager.uninstallCask(name, brewPath: brewPath)
+        } catch {
+            await activateFonts(unregistered)
+            throw error
+        }
+        invalidatePackageCache()
+        return .showResult(title: "Uninstalled \(name)", body: output)
+    }
+
+    /// Makes a cask's fonts usable right away, in Switch Font and in the apps it sets them
+    /// in. fontd misses them when the cask created ~/Library/Fonts, as on a new account.
+    private func activateFonts(_ paths: [String]) async {
+        let outcome = await FontActivation.activate(paths)
+        if !outcome.registered.isEmpty {
+            log.info("Registered \(outcome.registered.count) font files fontd hadn't picked up")
+        }
+        for (path, code) in outcome.failed.sorted(by: { $0.key < $1.key }) {
+            log.warning("Couldn't register font \(path, privacy: .public): CoreText error \(code)")
+        }
     }
 
     /// Turns on the modules for software that wasn't there `before` (module IDs) and is
