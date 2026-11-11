@@ -138,10 +138,6 @@ h1 { font-size: clamp(2.6rem, 6.2vw, 4.6rem); font-weight: 750; line-height: 0.9
 .get { display: flex; flex-direction: column; gap: 14px; margin-top: 6px; }
 .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .hand-links { gap: 10px; flex-wrap: wrap; }
-.sticker {
-  display: inline-block; transform: rotate(-5deg); padding: 5px 10px; font: 600 0.7rem var(--font-mono); letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--btn-ink); background: var(--btn); border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
-}
 .brew { display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 6px 6px 6px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; align-self: flex-start; }
 .brew code { background: none; border: 0; padding: 0; font-size: 0.8rem; overflow-wrap: anywhere; }
 .brew .prompt { color: var(--ink-2); }
@@ -158,11 +154,6 @@ h1 { font-size: clamp(2.6rem, 6.2vw, 4.6rem); font-weight: 750; line-height: 0.9
 .hero-shot img { max-width: 840px; margin-inline: auto; }
 .montage { margin-bottom: 28px; }
 .montage img[data-single] { max-width: 800px; border-radius: 12px; box-shadow: var(--shadow); }
-
-/* Numbers strip */
-.strip { border-block: 1px solid var(--line); background: var(--sunk); }
-.stats { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 28px; list-style: none; padding-block: 18px; font-size: 0.95rem; color: var(--ink-2); }
-.stats b { font: 700 1.5rem var(--font-display); color: var(--ink); margin-right: 4px; letter-spacing: -0.02em; }
 
 /* Sections */
 .section { padding-block: clamp(56px, 8vw, 104px); }
@@ -293,7 +284,6 @@ h1 { font-size: clamp(2.6rem, 6.2vw, 4.6rem); font-weight: 750; line-height: 0.9
 @media (max-width: 720px) {
   .nav-links .wide { display: none; }
   .nav-row { gap: 8px; }
-  .stats { justify-content: flex-start; }
   .note { grid-template-columns: minmax(0, 1fr); }
   .photo { width: 120px; }
   .brew { align-self: stretch; }

@@ -177,8 +177,7 @@
         const open = more.getAttribute('aria-expanded') !== 'true';
         $$('.chip', box).forEach((c, i) => { if (i >= LINEUP.length + 9) c.hidden = !open; });
         more.setAttribute('aria-expanded', String(open));
-        more.firstChild.textContent = open ? 'Show fewer' : 'Show all ';
-        more.querySelector('[data-stat]').hidden = open;
+        more.textContent = open ? 'Show fewer' : 'Show all';
         rove();
       });
     }
@@ -191,7 +190,6 @@
   fetch('themes.json').then((r) => r.json()).then((data) => {
     const lineup = LINEUP.map((name) => data.themes.find((t) => t.name === name)).filter(Boolean);
     themes = [...lineup, ...data.themes.filter((t) => !LINEUP.includes(t.name))];
-    Object.entries(data.stats || {}).forEach(([k, v]) => $$(`[data-stat="${k}"]`).forEach((el) => { el.textContent = v; }));
     buildChips();
     rove();
   }).catch(() => {});
@@ -313,7 +311,7 @@
     const chapter = $('.player-n', player);
     const CLIPS = [
       { at: 0, line: 'Whatever you’re into.', print: 'Apps, tracks, tabs, meetings, pull requests and AI sessions, from one search bar. Each with a preview.', rest: ['⇪', 'Space'] },
-      { at: 20.03, line: 'Comes in 73 colors.', print: 'One palette across macOS, your wallpaper, terminal and editor. Preview live. Esc is the safe word.', rest: ['⇪', 'Space'] },
+      { at: 20.03, line: 'One palette, everywhere.', print: 'A theme repaints macOS, your wallpaper, terminal and editor. Preview live. Esc is the safe word.', rest: ['⇪', 'Space'] },
       { at: 39.45, line: 'Try every position.', print: 'Tile, focus, maximize and grid every window from the keyboard, 4 pt apart.', rest: ['⇪', '←', '→', 'M', 'P'] },
     ];
     // Lap times, checked against the take: each key lights as it's pressed.
@@ -328,7 +326,6 @@
     ];
     const LIT = 0.9; // seconds a key stays lit
     const KEYS = new Set(['⇪', 'Space', '↓', '↩', 'esc', '←', '→', 'M', 'P']);
-    const themesStat = $('[data-stat="themes"]');
     let wants = !calm.matches; // play when in view; the Pause button and reduced motion turn it off
     let inView = false;
     let clip = -1;
@@ -340,7 +337,7 @@
       while (c > 0 && CLIPS[c].at > t) c--;
       if (c !== clip) {
         clip = c;
-        line.textContent = CLIPS[c].line.replace('73', themesStat ? themesStat.textContent : '73');
+        line.textContent = CLIPS[c].line;
         print.textContent = CLIPS[c].print;
         chapter.textContent = String(c + 1);
       }

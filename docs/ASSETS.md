@@ -40,7 +40,7 @@ How the doc wants it played:
 | From | Line | Small print | Keys at rest |
 | --- | --- | --- | --- |
 | 0:00 | Whatever you’re into. | Apps, tracks, tabs, meetings, pull requests and AI sessions, from one search bar. Each with a preview. | ⇪ Space |
-| 0:20.03 | Comes in 73 colors. | One palette across macOS, your wallpaper, terminal and editor. Preview live. Esc is the safe word. | ⇪ Space |
+| 0:20.03 | One palette, everywhere. | A theme repaints macOS, your wallpaper, terminal and editor. Preview live. Esc is the safe word. | ⇪ Space |
 | 0:39.45 | Try every position. | Tile, focus, maximize and grid every window from the keyboard, 4 pt apart. | ⇪ ← → M P |
 
 Key cues (seconds, each lit for about 0.9 s), mapped from the take's event
