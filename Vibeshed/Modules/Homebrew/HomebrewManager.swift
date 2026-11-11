@@ -91,15 +91,13 @@ enum HomebrewManager {
     // MARK: - Launch
 
     /// Opens the first of `paths` that exists on disk. Returns the launched app's path.
+    /// Through `AppLauncher`, since many casks are menu bar apps.
     static func launchFirstApp(at paths: [String]) async -> String? {
         guard let path = paths.first(where: { FileManager.default.fileExists(atPath: $0) }) else {
             return nil
         }
         do {
-            _ = try await NSWorkspace.shared.openApplication(
-                at: URL(fileURLWithPath: path),
-                configuration: .init()
-            )
+            try await AppLauncher.open(URL(fileURLWithPath: path))
             return path
         } catch {
             log.warning("Failed to launch \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
