@@ -8,11 +8,12 @@ extension WallpaperCanvas {
     mutating func mandelbrotFigure(grid: ASCIIGrid) -> ASCIIFigure {
         let view = ASCIIMandelbrot(real: -0.62 + rng.between(-0.08, 0.08), span: rng.between(3, 3.4))
         let values = view.render(columns: grid.columns, rows: grid.rows)
+        // A palette with few saturated hues (a grayscale one) gives fewer than three.
         let tones = harmony(3)
         let shades = asciiShades(isDark
-            ? [muted(tones[2], 0.55), muted(tones[1], 0.2), palette.accent,
+            ? [muted(tones.cycling(2), 0.55), muted(tones.cycling(1), 0.2), palette.accent,
                palette.accent.mix(palette.brightForeground, 0.7)]
-            : [palette.background.mix(tones[2], 0.5), tones[1], palette.accent,
+            : [palette.background.mix(tones.cycling(2), 0.5), tones.cycling(1), palette.accent,
                palette.accent.mix(palette.foreground, 0.5)])
         let ramp = Self.asciiRamp.count
         let inside = ASCIIMark(glyph: 0, color: muted(palette.accent, isDark ? 0.35 : 0.3))
