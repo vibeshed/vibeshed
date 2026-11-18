@@ -5,6 +5,12 @@ private let log = Log.module("openai")
 
 /// Reads Codex thread history from `~/.codex`.
 ///
+/// Codex Desktop's thread catalog (`CodexThreadCatalog`) decides which threads are
+/// listed, with their titles, times and hosts, whenever the app has written one: it
+/// covers threads on SSH hosts and leaves out the helper threads the app hides. Without
+/// it (the CLI alone), the session files below decide. Either way the transcripts give
+/// the model and fill in a missing directory or branch.
+///
 /// Two files describe a Codex session. `session_index.jsonl` is a flat, current index
 /// of thread ids to human titles, and each thread's `sessions/<y>/<m>/<d>/rollout-*.jsonl`
 /// transcript opens with a `session_meta` record carrying the working directory and git
@@ -22,30 +28,11 @@ enum OpenAISessionReader {
         root: URL = codexDirectory
     ) -> [AISession] {
         let transcripts = transcriptIndex(root: root)
-        let titled = indexedThreads(root: root)
-
-        // A thread can appear in either file: the index lags for brand-new threads,
-        // and old transcripts outlive their index entries. Union both, preferring the
-        // index's title and timestamp where present.
-        var candidates: [String: Candidate] = [:]
-        for (id, transcript) in transcripts {
-            candidates[id] = Candidate(
-                id: id, title: nil, timestamp: transcript.modified
-            )
-        }
-        for thread in titled {
-            candidates[thread.id] = Candidate(
-                id: thread.id,
-                title: thread.title,
-                timestamp: thread.updatedAt
-            )
-        }
-
-        let newest = Array(
-            candidates.values
-                .sorted { $0.timestamp > $1.timestamp }
-                .prefix(limit)
+        let cataloged = CodexThreadCatalog.threads(
+            databasePath: CodexThreadCatalog.databasePath(root: root), limit: limit
         )
+        let newest = cataloged.flatMap { $0.isEmpty ? nil : $0.map(Candidate.init) }
+            ?? fileCandidates(transcripts: transcripts, root: root, limit: limit)
 
         let metas = transcriptMetas(
             paths: newest.map { transcripts[$0.id]?.path }
@@ -55,10 +42,11 @@ enum OpenAISessionReader {
                 sessionID: candidate.id,
                 source: OpenAIProvider.codex,
                 title: candidate.title ?? "Session \(candidate.id.prefix(8))",
-                project: meta.cwd,
+                project: candidate.cwd ?? meta.cwd,
                 model: meta.model,
-                branch: meta.branch,
-                timestamp: candidate.timestamp
+                branch: candidate.branch ?? meta.branch,
+                timestamp: candidate.timestamp,
+                host: candidate.host
             )
         }
         log.debug("Codex sessions found: \(sessions.count, privacy: .public)")
@@ -71,6 +59,50 @@ enum OpenAISessionReader {
         let id: String
         let title: String?
         let timestamp: Date
+        var cwd: String?
+        var branch: String?
+        var host: AISessionHost?
+
+        init(id: String, title: String?, timestamp: Date) {
+            self.id = id
+            self.title = title
+            self.timestamp = timestamp
+        }
+
+        init(_ thread: CodexThreadCatalog.Thread) {
+            self.init(id: thread.id, title: thread.title, timestamp: thread.updatedAt)
+            cwd = thread.cwd
+            branch = thread.branch
+            host = thread.host
+        }
+    }
+
+    /// The `limit` newest threads by the session files alone. A thread can appear in
+    /// either file: the index lags for brand-new threads, and old transcripts outlive
+    /// their index entries. Union both, preferring the index's title and timestamp.
+    private static func fileCandidates(
+        transcripts: [String: Transcript],
+        root: URL,
+        limit: Int
+    ) -> [Candidate] {
+        var candidates: [String: Candidate] = [:]
+        for (id, transcript) in transcripts {
+            candidates[id] = Candidate(
+                id: id, title: nil, timestamp: transcript.modified
+            )
+        }
+        for thread in indexedThreads(root: root) {
+            candidates[thread.id] = Candidate(
+                id: thread.id,
+                title: thread.title,
+                timestamp: thread.updatedAt
+            )
+        }
+        return Array(
+            candidates.values
+                .sorted { $0.timestamp > $1.timestamp }
+                .prefix(limit)
+        )
     }
 
     private struct IndexedThread {

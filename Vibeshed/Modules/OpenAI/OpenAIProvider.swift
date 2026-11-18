@@ -45,7 +45,7 @@ struct OpenAIProvider: AIProvider {
     }
 
     func openSession(_ session: AISession, config _: OpenAIConfig) {
-        AILaunch.openURL(OpenAIDeeplink.thread(session.sessionID))
+        AILaunch.openURL(OpenAIDeeplink.thread(session.sessionID, hostID: session.host?.id))
     }
 
     static func cli(_ config: OpenAIConfig) -> String {

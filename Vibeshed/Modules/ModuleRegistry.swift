@@ -222,6 +222,11 @@ final class ModuleRegistry {
         modules[id]
     }
 
+    /// The loaded modules, in the order they loaded.
+    var loadedModules: [any Module] {
+        moduleIDs.compactMap { modules[$0] }
+    }
+
     func findAction(id: ActionID) async -> (any Action)? {
         let moduleID = id.moduleID
 

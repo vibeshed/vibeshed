@@ -1,7 +1,7 @@
 import Foundation
 
-/// Reads the model and git branch a Claude Code session last ran with from its
-/// transcript, `~/.claude/projects/<project-slug>/<session-id>.jsonl`.
+/// Reads the model and git branch a Claude Code session last ran with, and when it was
+/// last active, from its transcript, `~/.claude/projects/<project-slug>/<session-id>.jsonl`.
 ///
 /// Transcripts reach hundreds of megabytes, so only their tails are read, and only for
 /// the sessions actually being listed.
@@ -9,12 +9,16 @@ enum AnthropicTranscripts {
     struct Context: Equatable {
         let model: String?
         let branch: String?
+        /// When the session last did something (see `lastActivity(atPath:)`), which can
+        /// be well after its last prompt while Claude works on.
+        var lastActivity: Date?
 
         static let empty = Context(model: nil, branch: nil)
     }
 
     /// Fills in each session's model and branch from its transcript, preferring the
-    /// transcript's values: they are the newest the session recorded.
+    /// transcript's values: they are the newest the session recorded. Activity the
+    /// transcript records after the session's timestamp moves the timestamp up to it.
     static func enrich(
         _ sessions: [AISession],
         projectsDirectory: URL
@@ -34,7 +38,9 @@ enum AnthropicTranscripts {
             contexts[index] = context(atPath: path)
         }
         return zip(sessions, contexts).map { session, context in
-            session.updating(model: context.model, branch: context.branch)
+            session.updating(
+                model: context.model, branch: context.branch, lastActivity: context.lastActivity
+            )
         }
     }
 
@@ -86,7 +92,34 @@ enum AnthropicTranscripts {
             model = AnthropicModelName.displayName(for: id)
             return true
         }
-        return Context(model: model, branch: branch.flatMap(branchName))
+        return Context(
+            model: model,
+            branch: branch.flatMap(branchName),
+            lastActivity: lastActivity(atPath: path)
+        )
+    }
+
+    /// When the session last did something: the newest entry stamped with a time (a
+    /// prompt, a turn, a tool result, a queued message). Not the file's modification
+    /// date: Claude Desktop appends unstamped bookkeeping (`bridge-session`,
+    /// `last-prompt`, `cost-state`) whenever it reattaches a session, even one that was
+    /// only opened, which would float long-idle sessions to the top.
+    static func lastActivity(atPath path: String) -> Date? {
+        var activity: Date?
+        AIJSONL.scanTail(atPath: path, containing: [#""timestamp""#]) { record in
+            guard let stamp = record["timestamp"] as? String, let date = parseTimestamp(stamp) else {
+                return false
+            }
+            activity = date
+            return true
+        }
+        return activity
+    }
+
+    /// Transcript times are ISO 8601 in UTC, with milliseconds.
+    private static func parseTimestamp(_ stamp: String) -> Date? {
+        (try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(stamp))
+            ?? (try? Date.ISO8601FormatStyle().parse(stamp))
     }
 
     /// `HEAD` is what git reports on a detached checkout, which is no branch at all.

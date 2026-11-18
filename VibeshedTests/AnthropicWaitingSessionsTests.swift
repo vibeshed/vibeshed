@@ -101,6 +101,48 @@ final class AnthropicWaitingSessionsTests: XCTestCase {
         XCTAssertNil(sessions.last?.waitingFor)
     }
 
+    /// A session keeps working long after its prompt: its transcript's newest stamped
+    /// entry moves it past a session prompted since.
+    func testTranscriptActivityAfterThePromptCounts() throws {
+        let now = Date()
+        try writeHistory([
+            ("long-run", "refactor the reader", minutesAgo(60, from: now)),
+            ("quick", "bump the version", minutesAgo(10, from: now)),
+        ])
+        let lastTurn = now.addingTimeInterval(-60)
+        try writeTranscript(session: "long-run", stampedAt: [now.addingTimeInterval(-3600), lastTurn])
+
+        let sessions = readSessions(limit: 10)
+        XCTAssertEqual(sessions.map(\.sessionID), ["long-run", "quick"])
+        XCTAssertEqual(
+            sessions.first?.timestamp.timeIntervalSince1970 ?? 0, lastTurn.timeIntervalSince1970, accuracy: 0.01
+        )
+    }
+
+    /// Opening an idle session in Claude Desktop appends unstamped bookkeeping and so
+    /// rewrites the transcript now. That isn't activity: the session keeps its time and
+    /// stays below one prompted since.
+    func testReopeningAnIdleSessionIsNotActivity() throws {
+        let now = Date()
+        try writeHistory([
+            ("reopened", "add capslock arrows", minutesAgo(600, from: now)),
+            ("quick", "bump the version", minutesAgo(10, from: now)),
+        ])
+        try writeTranscript(
+            session: "reopened",
+            stampedAt: [now.addingTimeInterval(-36000)],
+            thenUnstamped: ["bridge-session", "last-prompt", "cost-state"]
+        )
+
+        let sessions = readSessions(limit: 10)
+        XCTAssertEqual(sessions.map(\.sessionID), ["quick", "reopened"])
+        XCTAssertEqual(
+            sessions.last?.timestamp.timeIntervalSince1970 ?? 0,
+            now.addingTimeInterval(-36000).timeIntervalSince1970,
+            accuracy: 0.01
+        )
+    }
+
     /// Claude Desktop runs its sessions on the CLI, which names the desktop session
     /// in `hostSessionId`.
     func testDesktopSessionIsMarkedThroughItsHostID() throws {
@@ -171,6 +213,31 @@ final class AnthropicWaitingSessionsTests: XCTestCase {
             history += try JSONSerialization.data(withJSONObject: json) + Data("\n".utf8)
         }
         try history.write(to: root.appendingPathComponent("history.jsonl"))
+    }
+
+    /// A history.jsonl time: milliseconds since 1970.
+    private func minutesAgo(_ minutes: Double, from now: Date) -> Double {
+        (now.timeIntervalSince1970 - minutes * 60) * 1000
+    }
+
+    /// A transcript for `session`, written now: an assistant turn stamped at each of
+    /// `stampedAt` (as Claude Code stamps them, ISO 8601 with milliseconds), then
+    /// unstamped records of the given types, as Claude Desktop appends them.
+    private func writeTranscript(session: String, stampedAt: [Date], thenUnstamped: [String] = []) throws {
+        let project = root.appendingPathComponent("projects/-tmp-project")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        let style = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+        let stamped: [[String: Any]] = stampedAt.map { date in
+            [
+                "type": "assistant", "isSidechain": false, "gitBranch": "main", "timestamp": style.format(date),
+                "message": ["model": "claude-opus-5-5"],
+            ]
+        }
+        var transcript = Data()
+        for record in stamped + thenUnstamped.map({ ["type": $0] }) {
+            transcript += try JSONSerialization.data(withJSONObject: record) + Data("\n".utf8)
+        }
+        try transcript.write(to: project.appendingPathComponent("\(session).jsonl"))
     }
 
     private func readSessions(limit: Int) -> [AISession] {

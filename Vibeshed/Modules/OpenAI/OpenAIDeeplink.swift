@@ -9,9 +9,17 @@ enum OpenAIDeeplink {
         AILaunch.isAppInstalled(bundleID: bundleID)
     }
 
-    /// Opens one thread by id.
-    static func thread(_ id: String) -> String {
-        "codex://threads/\(id)"
+    /// Opens one thread by id. A thread on another machine (an SSH host) also needs that
+    /// host's id, which the app reads from `hostId` as its own links do (26.1111).
+    static func thread(_ id: String, hostID: String? = nil) -> String {
+        var components = URLComponents()
+        components.scheme = "codex"
+        components.host = "threads"
+        components.path = "/\(id)"
+        if let hostID {
+            components.queryItems = [URLQueryItem(name: "hostId", value: hostID)]
+        }
+        return components.string ?? "codex://threads/\(id)"
     }
 
     /// Opens the app's connections settings, where MCP servers and integrations live.

@@ -94,13 +94,20 @@ actor AISessionsModule<Provider: AIProvider>: ModuleConfigurable {
     }
 
     private func sessionActions() -> [AIAction] {
-        currentSessions().enumerated().flatMap { index, session in
-            let action = makeSessionAction(
+        let sessions = currentSessions()
+        return zip(sessions, primaryRows(for: sessions)).flatMap { session, action in
+            [action] + provider.alternateActions(for: session, config: config)
+        }
+    }
+
+    /// One row per session that reopens it the default way, ranked in list order.
+    private func primaryRows(for sessions: [AISession]) -> [AIAction] {
+        sessions.enumerated().map { index, session in
+            makeSessionAction(
                 session,
                 namePrefix: "session",
                 relevanceScore: rankedScore(index: index)
             )
-            return [action] + provider.alternateActions(for: session, config: config)
         }
     }
 
@@ -181,5 +188,13 @@ actor AISessionsModule<Provider: AIProvider>: ModuleConfigurable {
                 }
             return .pushActions(results)
         }
+    }
+}
+
+extension AISessionsModule: AISessionListing {
+    /// The primary row of each cached session, without the alternate-surface rows and
+    /// whatever `enabledActions` keeps: the cross-vendor list asked for sessions.
+    func recentSessionActions() -> [AIAction] {
+        primaryRows(for: currentSessions())
     }
 }

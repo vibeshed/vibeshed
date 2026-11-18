@@ -138,6 +138,10 @@ keybindings:
   - combo: "capslock+k"
     action: "tiling/focusPreviousSplit"   # focus window in previous split (recent window off-grid)
 
+  # --- AI sessions ---
+  - combo: "capslock+slash"
+    action: "ai/recentSessions"           # every AI module's sessions: waiting on you first, then latest
+
   # --- system ---
   - combo: "capslock+q"
     action: "system/lock"

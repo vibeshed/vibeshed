@@ -62,12 +62,15 @@ enum AnthropicSessionReader {
 
         sessions.sort(by: ranksBefore)
         log.debug("Anthropic sessions found: \(sessions.count, privacy: .public)")
-        // Desktop sessions run on the CLI too, so both kinds have a transcript.
+        // Desktop sessions run on the CLI too, so both kinds have a transcript. The
+        // activity it records can move a session past ones prompted after it, hence
+        // the re-sort.
         return AnthropicTranscripts.enrich(
             Array(sessions.prefix(limit)),
             projectsDirectory: locations.claudeDirectory
                 .appendingPathComponent("projects")
         )
+        .sorted(by: ranksBefore)
     }
 
     /// Sessions waiting on the user first, then newest first, so the cap never drops
