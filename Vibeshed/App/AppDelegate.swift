@@ -173,6 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 AISessionsModule<AnthropicProvider>(),
                 AISessionsModule<OpenAIProvider>(),
                 AISessionsModule<OpenCodeProvider>(),
+                buildAIRecentSessionsModule(),
                 TelegramModule(),
                 ZoomModule(),
                 CalendarModule(),
@@ -236,6 +237,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return HomebrewModule(enableModules: { integrations in
             await cfgManager.enableModules(integrations.map { DefaultConfig.Entry($0) })
         })
+    }
+
+    /// Lists the sessions of whichever AI vendor modules are loaded when it's asked.
+    private func buildAIRecentSessionsModule() -> AIRecentSessionsModule {
+        let registry = moduleRegistry
+        return AIRecentSessionsModule { @MainActor in
+            registry.loadedModules.compactMap { $0 as? any AISessionListing }
+        }
     }
 
     private func buildSelfModule() -> SelfModule {

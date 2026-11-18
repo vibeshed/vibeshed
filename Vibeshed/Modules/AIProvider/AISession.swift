@@ -24,6 +24,15 @@ enum AIAccent: Sendable, Equatable {
     case neutral
 }
 
+/// A machine other than this Mac that a session runs on, such as an SSH host Codex
+/// Desktop works on. The session's `project` is a path on that machine.
+struct AISessionHost: Sendable, Equatable {
+    /// The vendor's id for the host, which reopening the session there needs.
+    let id: String
+    /// Shown before the project path, as in `geek:/srv/app`.
+    let name: String
+}
+
 enum AIItemType: String, Sendable {
     case session
     case launcher
@@ -49,6 +58,8 @@ struct AISession: Sendable {
     /// What the session is blocked on until the user answers, e.g. "permission
     /// prompt" or "input needed"; nil while it works or sits idle.
     var waitingFor: String?
+    /// Where the session runs when that isn't this Mac.
+    let host: AISessionHost?
 
     init(
         sessionID: String,
@@ -60,7 +71,8 @@ struct AISession: Sendable {
         model: String? = nil,
         branch: String? = nil,
         timestamp: Date,
-        waitingFor: String? = nil
+        waitingFor: String? = nil,
+        host: AISessionHost? = nil
     ) {
         self.sessionID = sessionID
         self.cliSessionID = cliSessionID
@@ -72,11 +84,21 @@ struct AISession: Sendable {
         self.branch = branch
         self.timestamp = timestamp
         self.waitingFor = waitingFor
+        self.host = host
+    }
+
+    /// The project as shown: its path, prefixed with the host for a session that runs
+    /// on another machine (`geek:/srv/app`), whose path `~` must not abbreviate.
+    var projectLabel: String? {
+        guard let project else { return nil }
+        guard let host else { return abbreviatePath(project) }
+        return "\(host.name):\(project)"
     }
 
     /// A copy with the model and branch replaced by fresher values, such as ones read
-    /// from the session's transcript. A nil argument keeps the current value.
-    func updating(model: String?, branch: String?) -> AISession {
+    /// from the session's transcript, and the timestamp moved up to `lastActivity` when
+    /// that is later. A nil argument keeps the current value.
+    func updating(model: String?, branch: String?, lastActivity: Date? = nil) -> AISession {
         AISession(
             sessionID: sessionID,
             cliSessionID: cliSessionID,
@@ -86,8 +108,9 @@ struct AISession: Sendable {
             project: project,
             model: model ?? self.model,
             branch: branch ?? self.branch,
-            timestamp: timestamp,
-            waitingFor: waitingFor
+            timestamp: max(timestamp, lastActivity ?? timestamp),
+            waitingFor: waitingFor,
+            host: host
         )
     }
 

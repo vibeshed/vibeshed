@@ -155,8 +155,9 @@ The app watches the config file for changes and hot-reloads automatically.
 | **Ghostty** | Focus open terminals, new windows/tabs, quick commands, config reload (Ghostty 1.3+) |
 | **Terminal** | New Terminal.app windows, Run Command, quick commands |
 | **Claude** | Resume Claude Code/Desktop sessions, start new ones, jump to sessions awaiting input |
-| **Codex** | Resume Codex threads with project/branch/model context, start new sessions |
+| **Codex** | Resume Codex threads with project/branch/model context (threads on SSH hosts too, as Codex Desktop lists them), start new sessions |
 | **OpenCode** | Resume OpenCode sessions in a terminal with project/model context, start new sessions |
+| **AI Sessions** | `ai/recentSessions`: the Claude, Codex and OpenCode sessions in one list, waiting on you first, then the latest activity. Needs no section of its own; it lists what those modules load |
 | **Zed** | Search and open recent workspaces |
 | **Homebrew** | Search, install, uninstall, upgrade packages and casks |
 | **Zoom** | Join meetings, start personal meeting, configured shortcuts |

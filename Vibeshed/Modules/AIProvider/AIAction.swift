@@ -149,7 +149,7 @@ extension AIAction {
             moduleName: module.displayName,
             source: session.source,
             itemType: .session,
-            projectPath: session.project,
+            projectPath: session.projectLabel,
             modelName: session.model,
             branch: session.branch,
             sessionTimestamp: session.timestamp,
@@ -174,6 +174,9 @@ extension AIAction {
         if let branch = session.branch {
             keywords.append(branch.lowercased())
         }
+        if let host = session.host {
+            keywords.append(host.name.lowercased())
+        }
         if session.waitingFor != nil {
             keywords.append("waiting")
         }
@@ -182,8 +185,8 @@ extension AIAction {
 
     private static func sessionSubtitle(_ session: AISession) -> String {
         var parts = [session.source.fullLabel]
-        if let project = session.project {
-            parts.append(abbreviatePath(project))
+        if let project = session.projectLabel {
+            parts.append(project)
         }
         if let model = session.model {
             parts.append(model)
