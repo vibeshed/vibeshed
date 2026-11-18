@@ -128,7 +128,7 @@ struct BtopTarget: ThemeTarget {
         } catch {
             return .failed(error.localizedDescription)
         }
-        await Self.reloadRunning()
+        Self.reloadRunning()
         return .applied()
     }
 
@@ -136,7 +136,7 @@ struct BtopTarget: ThemeTarget {
         let files = ThemeFiles.snapshot([Self.configPath, Self.themePath])
         return {
             await files()
-            await Self.reloadRunning()
+            Self.reloadRunning()
         }
     }
 
@@ -154,8 +154,8 @@ struct BtopTarget: ThemeTarget {
         return lines.joined(separator: "\n")
     }
 
-    private static func reloadRunning() async {
-        _ = await ShellCommand.run("/usr/bin/pkill -USR2 -x btop", timeout: 5)
+    private static func reloadRunning() {
+        ProcessSignal.send(SIGUSR2, toProcessesNamed: "btop")
     }
 }
 
