@@ -12,10 +12,11 @@ enum Anchor: String, Codable, Sendable {
 enum WindowSizing {
     // MARK: - Coordinate Conversion
 
-    /// Converts NSScreen.visibleFrame (bottom-left origin) to CG coordinates (top-left origin).
+    /// The screen's area for windows in CG coordinates (top-left origin): its `visibleFrame`,
+    /// plus the Dock's edge while the Dock hides (see `DockPlacement.usableFrame`).
     static func visibleFrameCG(of screen: NSScreen) -> CGRect {
         let primaryHeight = NSScreen.screens.first?.frame.height ?? screen.frame.height
-        let visible = screen.visibleFrame
+        let visible = DockPlacement.current().usableFrame(frame: screen.frame, visible: screen.visibleFrame)
         let y = primaryHeight - visible.origin.y - visible.height
         return CGRect(x: visible.origin.x, y: y, width: visible.width, height: visible.height)
     }
