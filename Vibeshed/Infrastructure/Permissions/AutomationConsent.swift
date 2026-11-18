@@ -66,15 +66,14 @@ enum AutomationConsent {
     }
 
     /// Starts a faceless helper app and waits until it can receive Apple events.
+    /// Started through `AppLauncher`: a System Events that NSWorkspace started would keep
+    /// macOS from reporting Vibeshed as quit for as long as System Events runs.
     private static func launchInBackground(_ bundleID: String) async {
         guard status(for: bundleID) == .notRunning,
-              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+              NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
         else { return }
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = false
-        configuration.addsToRecentItems = false
         do {
-            _ = try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+            try await AppLauncher.open(bundleID: bundleID, activates: false)
         } catch {
             Log.permissions.error(
                 "Couldn't start \(bundleID, privacy: .public): \(error.localizedDescription, privacy: .public)"

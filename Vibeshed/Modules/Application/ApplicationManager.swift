@@ -189,12 +189,11 @@ struct ApplicationManager: Sendable {
 
     // MARK: - Launch Application
 
+    /// Through `AppLauncher`, since any app may live in the menu bar or hide its Dock icon.
     @MainActor
     func launchApplication(_ app: AppInfo) async throws {
         log.debug("Launching application: \(app.name, privacy: .public) (\(app.id, privacy: .public))")
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
-        try await NSWorkspace.shared.openApplication(at: app.bundleURL, configuration: configuration)
+        try await AppLauncher.open(app.bundleURL)
         log.debug("Launched application: \(app.name, privacy: .public)")
     }
 
