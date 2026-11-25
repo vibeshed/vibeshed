@@ -2,10 +2,10 @@ import Foundation
 
 /// Procedural wallpaper algorithms, each painting purely from a theme palette.
 enum WallpaperStyle: String, CaseIterable, Sendable {
-    case glow, mesh, waves, ridges, bokeh, lowpoly, topographic, sunset, arcs, halftone
+    case glow, mesh, waves, ridges, bokeh, lowpoly, topographic, sunset, arcs
     case pulsar, guilloche, sashiko, attractor
     case bauhaus, destijl, truchet, terrazzo, circles, isometric, penrose
-    case flow, lens, papercut, automata, cyclic, chladni, complex, growth
+    case flow, lens, papercut, automata, chladni
     case leaves, warp, ascii, polyhedra, maze, dither, pipes
     case pebbles, macpattern, pinstripe
     case clouds, azul, winpattern, boing, rain
@@ -17,12 +17,20 @@ enum WallpaperStyle: String, CaseIterable, Sendable {
     /// What `auto` chooses from.
     static let varied: [WallpaperStyle] = allCases.filter(\.joinsAutomatic)
 
+    /// `varied` laid out as `auto`'s slots were settled. Halftone, since removed, held the
+    /// slot before Pulsar; it stays, empty, so every other theme keeps its pick.
+    private static let automaticSlots: [WallpaperStyle?] = {
+        var slots = varied.map(Optional.some)
+        slots.insert(nil, at: varied.firstIndex(of: .pulsar) ?? varied.count)
+        return slots
+    }()
+
     /// Whether `auto` may pick this style. Period pieces stay out, since they're made for
     /// their own themes, and so do styles added after the pool was settled: growing it
     /// would reshuffle every theme's stable pick. Those are opt-in, by name.
     var joinsAutomatic: Bool {
         switch self {
-        case .solid, .flow, .lens, .papercut, .automata, .cyclic, .chladni, .complex, .growth: false
+        case .solid, .flow, .lens, .papercut, .automata, .chladni: false
         default: !isPeriodPiece
         }
     }
@@ -51,7 +59,6 @@ enum WallpaperStyle: String, CaseIterable, Sendable {
         case .topographic: "Topographic"
         case .sunset: "Retro Sunset"
         case .arcs: "Retro Arcs"
-        case .halftone: "Halftone"
         case .pulsar: "Pulsar"
         case .guilloche: "Guilloché"
         case .sashiko: "Sashiko"
@@ -67,10 +74,7 @@ enum WallpaperStyle: String, CaseIterable, Sendable {
         case .lens: "Lens"
         case .papercut: "Paper Cut"
         case .automata: "Automata"
-        case .cyclic: "Cyclic"
         case .chladni: "Chladni"
-        case .complex: "Complex"
-        case .growth: "Growth"
         case .leaves: "Leaves"
         case .warp: "Warp Speed"
         case .ascii: "ASCII Art"
@@ -101,7 +105,6 @@ enum WallpaperStyle: String, CaseIterable, Sendable {
         case .topographic: "Contour lines of a noise landscape"
         case .sunset: "Striped sun over a perspective grid"
         case .arcs: "Seventies rainbow bands from a corner"
-        case .halftone: "Dot grid swelling toward the accent"
         case .pulsar: "Stacked line plots peaking in the middle, after the Unknown Pleasures cover"
         case .guilloche: "Hairline rosettes braided from sine-modulated rings, like a banknote"
         case .sashiko: "Hitomezashi running stitches, with the shapes they close off tinted"
@@ -117,10 +120,7 @@ enum WallpaperStyle: String, CaseIterable, Sendable {
         case .lens: "Tilted bands and a sun bent around a black hole by a gravitational lens"
         case .papercut: "Layered paper sheets with soft shadows, parting around a sun"
         case .automata: "Panels of elementary cellular automata, each running its own Wolfram rule"
-        case .cyclic: "Griffeath's cyclic cellular automaton: noise that organizes itself into square spirals"
         case .chladni: "Sand gathering on the still lines of a vibrating plate"
-        case .complex: "A complex function's phase portrait: zeros and poles become pinwheels"
-        case .growth: "Differential growth: a folding ring drawn at every stage, like brain coral"
         case .leaves: "Haiku's Leaves screen saver: gradient leaves piling up on the desktop"
         case .warp: "Star streaks at warp speed, after OS/2 Warp"
         case .ascii: "Terminal-character art: donut.c's lit torus, the Mandelbrot set or aafire's flames"
@@ -151,7 +151,6 @@ enum WallpaperStyle: String, CaseIterable, Sendable {
         case .topographic: "map"
         case .sunset: "sunset"
         case .arcs: "rainbow"
-        case .halftone: "circle.grid.3x3"
         case .pulsar: "waveform.path.ecg"
         case .guilloche: "seal"
         case .sashiko: "square.dashed"
@@ -167,10 +166,7 @@ enum WallpaperStyle: String, CaseIterable, Sendable {
         case .lens: "camera.aperture"
         case .papercut: "square.3.layers.3d.down.right"
         case .automata: "rectangle.split.3x3"
-        case .cyclic: "arrow.triangle.2.circlepath"
         case .chladni: "waveform.path"
-        case .complex: "function"
-        case .growth: "brain"
         case .leaves: "leaf"
         case .warp: "sparkles"
         case .ascii: "terminal"
@@ -193,7 +189,9 @@ enum WallpaperStyle: String, CaseIterable, Sendable {
     /// A style name from config (`auto` resolves per theme). Nil if unknown.
     static func resolve(_ name: String, slug: String) -> WallpaperStyle? {
         if name.lowercased() == automatic {
-            return varied[Int(StableHash.of(slug) % UInt64(varied.count))]
+            let hash = StableHash.of(slug), slots = UInt64(automaticSlots.count)
+            // A theme that lands on an empty slot picks again, from the styles left.
+            return automaticSlots[Int(hash % slots)] ?? varied[Int(hash / slots % UInt64(varied.count))]
         }
         return WallpaperStyle(rawValue: name.lowercased())
     }

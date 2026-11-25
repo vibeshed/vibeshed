@@ -1,9 +1,8 @@
 import CoreGraphics
 import Foundation
 
-/// Cellular automata in crisp cells: panels of Wolfram's elementary automata, and
-/// Griffeath's cyclic automaton grown from noise into spirals. Each grid is painted as one
-/// small bitmap and scaled up without smoothing.
+/// Cellular automata in crisp cells: panels of Wolfram's elementary automata. Each grid is
+/// painted as one small bitmap and scaled up without smoothing.
 ///
 /// Automata is adapted from gart (https://github.com/igr/gart), © 2022 Igor Spasić, BSD 2-Clause License.
 extension WallpaperCanvas {
@@ -74,49 +73,6 @@ extension WallpaperCanvas {
         context.restoreGState()
     }
 
-    // MARK: - Cyclic
-
-    /// Griffeath's cyclic cellular automaton (Fisch, Gravner & Griffeath, "Threshold-range
-    /// scaling of excitable cellular automata", 1991): fourteen states in a ring, and a cell
-    /// moves on to the next state as soon as a neighbor holds it. From random noise, waves
-    /// start chasing each other around and spirals take over the screen: square Greek-key
-    /// spirals with the four nearest neighbors (two times in three), rounder ones with all
-    /// eight. Drawn in 4-unit cells.
-    mutating func paintCyclic() {
-        let moore = rng.int(below: 3) == 2
-        // Whole words of eight cells; the extra columns run off the right edge.
-        let columns = (Int((unitWidth / 4).rounded(.up)) + 7) / 8 * 8, rows = 250
-        let automaton = CyclicAutomaton(columns: columns, rows: rows)
-        defer { automaton.deallocate() }
-        automaton.scatter(using: &rng)
-        automaton.run(steps: moore ? 900 : 420, moore: moore)
-        let pixels = cyclicTones().withUnsafeBufferPointer { tones in
-            Self.pixels(count: columns * rows) { tones[Int(automaton.cells[$0])] }
-        }
-        guard let image = bitmapImage(columns: columns, rows: rows, pixels: pixels) else { return fill(base) }
-        let size = CGSize(width: CGFloat(columns) * 4 * unit, height: CGFloat(rows) * 4 * unit)
-        context.interpolationQuality = .none
-        context.draw(image, in: CGRect(origin: CGPoint(x: 0, y: height - size.height), size: size))
-    }
-
-    /// A ring of four tones crossfaded smoothly over the fourteen states, so each wave reads
-    /// as a band of color rather than fourteen steps.
-    private func cyclicTones() -> [UInt32] {
-        let hues = harmony(4, keepingTwin: true)
-        let ring = isDark
-            ? [hues[0], muted(hues.cycling(1), 0.25), base.mix(hues[0], 0.12), muted(hues.cycling(2), 0.3)]
-            : [
-                hues[0].mix(palette.background, 0.15), hues.cycling(1).mix(palette.background, 0.45),
-                palette.background, hues.cycling(2).mix(palette.background, 0.4),
-            ]
-        return (0 ..< CyclicAutomaton.states).map { state in
-            let position = Double(state) / Double(CyclicAutomaton.states) * Double(ring.count)
-            let index = Int(position)
-            let tone = ring[index].mix(ring.cycling(index + 1), smoothstep(0, 1, position - Double(index)))
-            return Self.packed(tone)
-        }
-    }
-
     /// A color as one RGBX pixel's bytes, read as a (little-endian) word.
     static func packed(_ color: ThemeColor) -> UInt32 {
         UInt32(color.red8) | UInt32(color.green8) << 8 | UInt32(color.blue8) << 16 | 0xFF00_0000
@@ -160,117 +116,5 @@ struct ElementaryAutomaton {
             }
         }
         return history
-    }
-}
-
-/// Griffeath's cyclic automaton on a grid that wraps at every edge, with threshold one.
-/// Cells are bytes packed eight to a 64-bit word, and a step updates a whole word at once
-/// with plain integer arithmetic (SWAR). Rows are split across the render lanes; each
-/// step reads one buffer and writes the other, so the lanes never race.
-private final class CyclicAutomaton {
-    static let states: UInt64 = 14
-
-    let columns: Int
-    let rows: Int
-    private let words: Int
-    private var front: LaneBuffer<UInt64>
-    private var back: LaneBuffer<UInt64>
-
-    /// `columns` must be a multiple of eight.
-    init(columns: Int, rows: Int) {
-        self.columns = columns
-        self.rows = rows
-        words = columns / 8
-        front = LaneBuffer(zeroed: words * rows)
-        back = LaneBuffer(zeroed: words * rows)
-    }
-
-    func deallocate() {
-        front.deallocate()
-        back.deallocate()
-    }
-
-    /// Every cell's state, row-major (byte order is little-endian on every Mac).
-    var cells: UnsafePointer<UInt8> {
-        UnsafePointer(UnsafeMutableRawPointer(front.base).assumingMemoryBound(to: UInt8.self))
-    }
-
-    /// Random states everywhere, four cells from each draw.
-    func scatter(using rng: inout SeededGenerator) {
-        let bytes = UnsafeMutableRawPointer(front.base).assumingMemoryBound(to: UInt8.self)
-        var cell = 0
-        while cell < columns * rows {
-            let draw = rng.next()
-            for chunk in 0 ..< min(4, columns * rows - cell) {
-                let uniform = (draw &>> (16 * UInt64(chunk))) & 0xFFFF
-                bytes[cell + chunk] = UInt8((uniform * Self.states) &>> 16)
-            }
-            cell += 4
-        }
-    }
-
-    func run(steps: Int, moore: Bool) {
-        for _ in 0 ..< steps {
-            let (source, target, words, rows) = (front, back, words, rows)
-            RenderLanes.split(rows) { _, band in
-                for row in band {
-                    Self.advance(row: row, from: source, to: target, shape: (words, rows), moore: moore)
-                }
-            }
-            (front, back) = (back, front)
-        }
-    }
-
-    /// One row's next generation: every byte becomes its successor state where a neighbor
-    /// already holds that state.
-    private static func advance(
-        row: Int, from source: LaneBuffer<UInt64>, to target: LaneBuffer<UInt64>, shape: (words: Int, rows: Int),
-        moore: Bool
-    ) {
-        let words = shape.words
-        let middle = source.base + row * words, output = target.base + row * words
-        let above = source.base + (row + shape.rows - 1) % shape.rows * words
-        let below = source.base + (row + 1) % shape.rows * words
-        var previous = middle[words - 1], current = middle[0], word = 0
-        while word < words {
-            let left = word == 0 ? words - 1 : word - 1, right = word + 1 == words ? 0 : word + 1
-            let next = middle[right]
-            let want = successor(current)
-            var hit = zeroBytes(shiftedRight(current, previous) ^ want) | zeroBytes(shiftedLeft(current, next) ^ want)
-            hit |= zeroBytes(above[word] ^ want) | zeroBytes(below[word] ^ want)
-            if moore {
-                hit |= zeroBytes(shiftedRight(above[word], above[left]) ^ want)
-                    | zeroBytes(shiftedLeft(above[word], above[right]) ^ want)
-                    | zeroBytes(shiftedRight(below[word], below[left]) ^ want)
-                    | zeroBytes(shiftedLeft(below[word], below[right]) ^ want)
-            }
-            output[word] = current ^ ((current ^ want) & ((hit &>> 7) &* 0xFF))
-            (previous, current, word) = (current, next, word + 1)
-        }
-    }
-
-    /// Each cell's left neighbor in its place: the word moved one byte up, with the last
-    /// byte of the word before carried in.
-    private static func shiftedRight(_ word: UInt64, _ before: UInt64) -> UInt64 {
-        (word &<< 8) | (before &>> 56)
-    }
-
-    /// Each cell's right neighbor in its place.
-    private static func shiftedLeft(_ word: UInt64, _ after: UInt64) -> UInt64 {
-        (word &>> 8) | (after &<< 56)
-    }
-
-    /// Every byte's next state, wrapping 13 to 0.
-    private static func successor(_ word: UInt64) -> UInt64 {
-        let next = word &+ 0x0101_0101_0101_0101
-        let wrapped = zeroBytes(next ^ (0x0101_0101_0101_0101 &* states))
-        return next & ~((wrapped &>> 7) &* 0xFF)
-    }
-
-    /// 0x80 in every byte of `word` that's zero, 0 in the others (exact: no borrow
-    /// crosses between bytes).
-    private static func zeroBytes(_ word: UInt64) -> UInt64 {
-        let low: UInt64 = 0x7F7F_7F7F_7F7F_7F7F
-        return ~(((word & low) &+ low) | word | low)
     }
 }

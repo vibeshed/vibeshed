@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-/// Shared machinery for the styles that compute a lot: per-pixel fields, particle and cell
+/// Shared machinery for the styles that compute a lot: per-pixel fields and particle
 /// simulations. Work runs on four fixed lanes, as `AttractorDensity` does, so a render never
 /// depends on the machine and a seed always paints the same picture. Hot loops read and
 /// write raw pointers, which debug builds (what `make install` ships) still compile to
@@ -85,12 +85,6 @@ func scrambled(_ value: UInt64) -> UInt64 {
 /// rather than inline — it shows in loops that run millions of times.
 func clampUnit(_ value: Double) -> Double {
     value < 0 ? 0 : value > 1 ? 1 : value
-}
-
-/// `smoothstep` built on `clampUnit`, for per-pixel loops.
-func hermite(_ edge0: Double, _ edge1: Double, _ value: Double) -> Double {
-    let progress = clampUnit((value - edge0) / (edge1 - edge0))
-    return progress * progress * (3 - 2 * progress)
 }
 
 extension WallpaperCanvas {
