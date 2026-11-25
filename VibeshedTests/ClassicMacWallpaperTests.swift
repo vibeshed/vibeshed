@@ -85,13 +85,31 @@ final class ClassicMacWallpaperTests: XCTestCase {
         let pieces = WallpaperStyle.allCases.filter(\.isPeriodPiece)
         XCTAssertEqual(Set(pieces), Set(bitmaps).union([.azul]))
         XCTAssertTrue(pieces.allSatisfy { !WallpaperStyle.varied.contains($0) })
-        let optIn: Set<WallpaperStyle> = [.flow, .lens, .papercut, .automata, .cyclic, .chladni, .complex, .growth]
+        let optIn: Set<WallpaperStyle> = [.flow, .lens, .papercut, .automata, .chladni]
         XCTAssertTrue(optIn.allSatisfy { !WallpaperStyle.varied.contains($0) }, "styles added later are opt-in")
-        XCTAssertEqual(WallpaperStyle.varied.count, 28, "existing themes keep their automatic style")
-        XCTAssertEqual(WallpaperStyle.varied.map(\.rawValue), [
-            "glow", "mesh", "waves", "ridges", "bokeh", "lowpoly", "topographic", "sunset", "arcs", "halftone",
-            "pulsar", "guilloche", "sashiko", "attractor", "bauhaus", "destijl", "truchet", "terrazzo", "circles",
-            "isometric", "penrose", "leaves", "warp", "ascii", "polyhedra", "maze", "dither", "pipes",
-        ], "in the same order, so every theme's pick stays put")
+        XCTAssertEqual(WallpaperStyle.varied.map(\.rawValue), Self.settledPool.filter { $0 != "halftone" })
+    }
+
+    /// `auto`'s pool as it was settled, Halftone included: every theme's pick is a slot here.
+    private static let settledPool = [
+        "glow", "mesh", "waves", "ridges", "bokeh", "lowpoly", "topographic", "sunset", "arcs", "halftone",
+        "pulsar", "guilloche", "sashiko", "attractor", "bauhaus", "destijl", "truchet", "terrazzo", "circles",
+        "isometric", "penrose", "leaves", "warp", "ascii", "polyhedra", "maze", "dither", "pipes",
+    ]
+
+    func testRemovingHalftoneKeepsEveryOtherThemesAutomaticStyle() throws {
+        var moved = 0
+        for theme in BuiltInThemes.all {
+            let slug = ResolvedTheme.slug(for: theme.name)
+            let settled = Self.settledPool[Int(StableHash.of(slug) % UInt64(Self.settledPool.count))]
+            let picked = try XCTUnwrap(WallpaperStyle.resolve("auto", slug: slug), theme.name)
+            if settled == "halftone" {
+                XCTAssertTrue(WallpaperStyle.varied.contains(picked), theme.name)
+                moved += 1
+            } else {
+                XCTAssertEqual(picked.rawValue, settled, "\(theme.name) keeps its automatic style")
+            }
+        }
+        XCTAssertGreaterThan(moved, 0, "some built-in theme landed on Halftone, so the re-pick is exercised")
     }
 }

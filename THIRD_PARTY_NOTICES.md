@@ -4,7 +4,7 @@ Vibeshed is MIT licensed. Parts of it are adapted from the projects below, under
 
 ## gart
 
-The Flow, Lens, Paper Cut, Automata and Growth wallpaper styles are adapted from
+The Flow, Lens, Paper Cut and Automata wallpaper styles are adapted from
 [gart](https://github.com/igr/gart) by Igor Spasić.
 
 ```

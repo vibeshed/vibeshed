@@ -149,36 +149,6 @@ extension WallpaperCanvas {
         context.setFillColor(palette.background.cgColor)
         disc(at: center, radius: inner)
     }
-
-    // MARK: - Halftone
-
-    /// A hexagonal dot grid whose dots swell toward an accent focal point.
-    mutating func paintHalftone() {
-        fill(palette.background)
-        let focus = point(rng.between(0.55, 0.95), rng.between(0.05, 0.45))
-        let reach = Double(max(width, height)) * 0.9
-        let spacing = unit * 26
-        let rowHeight = spacing * 0.866
-        var row = 0
-        var y: CGFloat = 0
-        while y <= height + spacing {
-            var x: CGFloat = row.isMultiple(of: 2) ? 0 : spacing / 2
-            while x <= width + spacing {
-                let distance = Double(hypot(x - focus.x, y - focus.y)) / reach
-                let wobble = noise.fractal(Double(x / width) * 4, Double(y / height) * 4, octaves: 3) - 0.5
-                let intensity = min(max(1 - distance + wobble * 0.35, 0), 1)
-                let radius = spacing * 0.46 * CGFloat(pow(intensity, 1.3))
-                if radius > 0.6 {
-                    let color = palette.muted.mix(palette.accent, intensity)
-                    context.setFillColor(color.cgColor.copy(alpha: 0.9) ?? color.cgColor)
-                    disc(at: CGPoint(x: x, y: y), radius: radius)
-                }
-                x += spacing
-            }
-            row += 1
-            y += rowHeight
-        }
-    }
 }
 
 /// Where a contour crosses each side of a marching-squares cell.

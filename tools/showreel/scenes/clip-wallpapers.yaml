@@ -38,9 +38,9 @@ actions:
   - press: return
   - wait: 0.9
   - marker: browsing
-  # Retro Sunset, Retro Arcs, Halftone, Pulsar (Guilloché, next, renders too
-  # slowly to preview in time).
-  - press: { keys: down, times: 4, interval: 1.1 }
+  # Retro Sunset, Retro Arcs, Pulsar (Guilloché, next, renders too slowly to
+  # preview in time).
+  - press: { keys: down, times: 3, interval: 1.1 }
   - wait: 1.0
   - press: { keys: escape, times: 2, interval: 0.25 }
   - waitFor: { window: picker, gone: true }

@@ -1,9 +1,9 @@
 import CoreGraphics
 import Foundation
 
-/// Fields computed pixel by pixel at full device resolution, on the render lanes: stripes
-/// and a sun bent by a gravitational lens, and a complex function's phase portrait. Their
-/// edges are filtered analytically, one pixel soft, instead of supersampled.
+/// A field computed pixel by pixel at full device resolution, on the render lanes: stripes
+/// and a sun bent by a gravitational lens. Its edges are filtered analytically, one pixel
+/// soft, instead of supersampled.
 ///
 /// Lens is adapted from gart (https://github.com/igr/gart), © 2022 Igor Spasić, BSD 2-Clause License.
 extension WallpaperCanvas {
@@ -31,40 +31,6 @@ extension WallpaperCanvas {
         )
         let columns = Int(width)
         paintRows { row, pixels in lens.shade(row: row, columns: columns, into: pixels) }
-    }
-
-    // MARK: - Complex
-
-    /// An enhanced phase portrait of a complex function, after Elias Wegert's *Visual
-    /// Complex Functions* (2012): the argument of f(z) goes once around a ring of palette
-    /// colors, log₂|f| adds shaded bands, rings that crowd in on every zero and pole, and
-    /// twelve faint lines mark the phase. Zeros and poles become pinwheels.
-    mutating func paintComplex() {
-        let function = rng.pick(PhasePortrait.Function.allCases)
-        let offset = (x: rng.between(-0.3, 0.3) * function.span, y: rng.between(-0.2, 0.2) * function.span)
-        let hues = harmony(4, keepingTwin: true)
-        let stops = isDark
-            ? [hues[0], muted(hues.cycling(1), 0.2), muted(hues.cycling(2), 0.35), muted(hues.cycling(3), 0.2)]
-            : zip(0 ..< 4, [0.2, 0.35, 0.5, 0.35]).map { hues.cycling($0).mix(palette.background, $1) }
-        // The ring as RGB triples in raw memory: the per-pixel lookup stays a plain load.
-        let ring = LaneBuffer<Double>(zeroed: PhasePortrait.ringSize * 3)
-        defer { ring.deallocate() }
-        for step in 0 ..< PhasePortrait.ringSize {
-            let position = Double(step) / Double(PhasePortrait.ringSize) * Double(stops.count)
-            let index = Int(position)
-            let tone = PixelTone(stops.cycling(index).mix(
-                stops.cycling(index + 1),
-                smoothstep(0, 1, position - Double(index))
-            ))
-            (ring.base[step * 3], ring.base[step * 3 + 1], ring.base[step * 3 + 2]) = (tone.red, tone.green, tone.blue)
-        }
-        let portrait = PhasePortrait(
-            function: function, scale: Double(height) / function.span,
-            center: (x: Double(width) / 2, y: Double(height) / 2), offset: offset,
-            ring: ring, ground: PixelTone(base), isDark: isDark
-        )
-        let columns = Int(width)
-        paintRows { row, pixels in portrait.shade(row: row, columns: columns, into: pixels) }
     }
 }
 
@@ -130,94 +96,5 @@ private struct GravitationalLens: Sendable {
     private static func inked(_ value: Double) -> Double {
         let whole = floor(value), part = value - whole
         return whole * duty + (part < duty ? part : duty)
-    }
-}
-
-/// f(z) shaded per pixel: hue from arg f, brightness bands from log₂|f|.
-private struct PhasePortrait: Sendable {
-    enum Function: CaseIterable {
-        /// (z² − 1)(z − 2 − i)² / (z² + 2 + 2i): two simple zeros, a double one and two poles.
-        case rational
-        /// sin z / z: a row of zeros along the real axis, growing without bound off it.
-        case sinc
-        /// (z⁵ − 1) / (z² + 0.4 + 0.3i): the fifth roots of unity around two poles.
-        case roots
-
-        /// How much of the plane the screen's height covers.
-        var span: Double {
-            switch self {
-            case .rational: 3.2
-            case .sinc: 9
-            case .roots: 2.4
-            }
-        }
-    }
-
-    static let ringSize = 512
-
-    let function: Function
-    /// Pixels per unit of z.
-    let scale: Double
-    let center: (x: Double, y: Double)
-    /// The value of z at the middle of the screen.
-    let offset: (x: Double, y: Double)
-    /// `ringSize` RGB triples, 0–255, once around the palette.
-    let ring: LaneBuffer<Double>
-    let ground: PixelTone
-    let isDark: Bool
-
-    func shade(row: Int, columns: Int, into pixels: UnsafeMutablePointer<UInt8>) {
-        let imaginary = (center.y - Double(row) - 0.5) / scale + offset.y
-        var column = 0
-        while column < columns {
-            let real = (Double(column) + 0.5 - center.x) / scale + offset.x
-            let value = evaluate(real, imaginary)
-            let turn = atan2(value.im, value.re) / (2 * .pi) + 0.5
-            let level = log2((value.re * value.re + value.im * value.im).squareRoot() + 1e-12)
-            let band = level - floor(level)
-            var shade = 0.72 + 0.28 * hermite(0, 0.92, band) - 0.28 * hermite(0.92, 1, band)
-            let isochromatic = turn * 12 - floor(turn * 12)
-            shade *= 1 - 0.08 * (1 - hermite(0, 0.06, isochromatic))
-            let tone = ring.base + Int(turn * Double(Self.ringSize - 1)) * 3
-            let amount = isDark ? shade : 0.35 + 0.65 * shade, pixel = pixels + column * 4
-            pixel[0] = UInt8(ground.red + (tone[0] - ground.red) * amount + 0.5)
-            pixel[1] = UInt8(ground.green + (tone[1] - ground.green) * amount + 0.5)
-            pixel[2] = UInt8(ground.blue + (tone[2] - ground.blue) * amount + 0.5)
-            pixel[3] = 255
-            column += 1
-        }
-    }
-
-    private func evaluate(_ real: Double, _ imaginary: Double) -> (re: Double, im: Double) {
-        let square = (re: real * real - imaginary * imaginary, im: 2 * real * imaginary)
-        switch function {
-        case .rational:
-            let shifted = (re: real - 2, im: imaginary - 1)
-            let numerator = Self.times(
-                (square.re - 1, square.im),
-                Self.times(shifted, shifted)
-            )
-            return Self.over(numerator, (square.re + 2, square.im + 2))
-        case .sinc:
-            let sine = (re: sin(real) * cosh(imaginary), im: cos(real) * sinh(imaginary))
-            return Self.over(sine, (real, imaginary))
-        case .roots:
-            let fifth = Self.times(Self.times(square, square), (real, imaginary))
-            return Self.over((fifth.re - 1, fifth.im), (square.re + 0.4, square.im + 0.3))
-        }
-    }
-
-    private static func times(
-        _ lhs: (re: Double, im: Double), _ rhs: (re: Double, im: Double)
-    ) -> (re: Double, im: Double) {
-        (lhs.re * rhs.re - lhs.im * rhs.im, lhs.re * rhs.im + lhs.im * rhs.re)
-    }
-
-    private static func over(
-        _ lhs: (re: Double, im: Double), _ rhs: (re: Double, im: Double)
-    ) -> (re: Double, im: Double) {
-        let norm = rhs.re * rhs.re + rhs.im * rhs.im
-        let divisor = norm == 0 ? 1e-12 : norm
-        return ((lhs.re * rhs.re + lhs.im * rhs.im) / divisor, (lhs.im * rhs.re - lhs.re * rhs.im) / divisor)
     }
 }
