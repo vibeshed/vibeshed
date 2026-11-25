@@ -14,33 +14,67 @@ enum WallpaperRenderer {
     /// Generated files kept on disk; older ones are pruned (never one that's on screen).
     private static let cacheLimit = 48
 
-    /// Renders (or reuses) the wallpaper at the largest screen's pixel size. The file name
-    /// carries every input, since macOS won't redraw a wallpaper whose URL didn't change.
-    /// Drawn off the main thread so a live preview doesn't stall the picker.
-    static func render(_ theme: ResolvedTheme, choice: WallpaperChoice) async -> URL? {
-        let size = await MainActor.run { largestScreenPixelSize() }
+    /// Renders (or reuses) a wallpaper for every display at its own pixel size, keyed by
+    /// display ID: one picture spread across the arrangement when `spanning` and the style
+    /// can, else one per display. A display whose image couldn't be drawn is left out.
+    /// File names carry every input, since macOS won't redraw a wallpaper whose URL didn't
+    /// change. Drawn off the main thread, displays in parallel, so a live preview doesn't
+    /// stall the picker.
+    static func render(_ theme: ResolvedTheme, choice: WallpaperChoice, spanning: Bool) async -> [Int: URL] {
+        let layout = await MainActor.run { WallpaperLayout.current }
+        // Displays of the same size share an image unless it spans.
+        var files: [Int: URL] = [:], jobs: [URL: WallpaperFrame] = [:]
+        for (display, frame) in layout.frames(spanning: spanning && choice.style.spans) {
+            let url = file(for: frame, theme: theme, choice: choice)
+            files[display] = url
+            jobs[url] = frame
+        }
+        let drawn = await withTaskGroup(of: URL?.self) { group in
+            for (url, frame) in jobs {
+                group.addTask { renderFile(url, frame: frame, palette: theme.palette, choice: choice) ? url : nil }
+            }
+            return await group.reduce(into: Set<URL>()) { drawn, url in
+                if let url { drawn.insert(url) }
+            }
+        }
+        return files.filter { drawn.contains($0.value) }
+    }
+
+    private static func file(for frame: WallpaperFrame, theme: ResolvedTheme, choice: WallpaperChoice) -> URL {
         let name = [
             theme.slug, choice.style.rawValue, String(choice.seed, radix: 16), paletteHash(theme.palette),
-            "\(Int(size.width))x\(Int(size.height))", choice.grain ? "g" : "",
-        ].joined(separator: "-")
-        let url = directory.appendingPathComponent("\(name).jpg")
-        if FileManager.default.fileExists(atPath: url.path) { return url }
-        // A superseded preview: the drawing itself can't be interrupted, so don't start it.
-        guard !Task.isCancelled else { return nil }
+            "\(Int(frame.pixels.width))x\(Int(frame.pixels.height))",
+        ] + (frame.spans ? ["s\(frame.signature)"] : []) + [choice.grain ? "g" : ""]
+        return directory.appendingPathComponent("\(name.joined(separator: "-")).jpg")
+    }
 
-        guard let image = draw(theme.palette, size: size, choice: choice) else { return nil }
+    private static func renderFile(
+        _ url: URL, frame: WallpaperFrame, palette: ThemePalette, choice: WallpaperChoice
+    ) -> Bool {
+        if FileManager.default.fileExists(atPath: url.path) { return true }
+        // A superseded preview: the drawing itself can't be interrupted, so don't start it.
+        guard !Task.isCancelled, let image = draw(palette, frame: frame, choice: choice) else { return false }
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {
-            return nil
+            return false
         }
-        return writeJPEG(image, to: url) ? url : nil
+        return writeJPEG(image, to: url)
     }
 
     static func draw(_ palette: ThemePalette, size: CGSize, choice: WallpaperChoice) -> CGImage? {
-        guard var canvas = WallpaperCanvas(size: size, palette: palette, seed: choice.seed) else { return nil }
-        // Styles may change the transform (unit space) or blend mode; grain goes on untouched.
+        draw(palette, frame: .single(size), choice: choice)
+    }
+
+    /// The part of the picture `frame` shows. Every display of a spanning picture paints the
+    /// whole canvas through its own viewport (the seed makes the same choices each time), so
+    /// the slices meet without having to hold the arrangement's full bitmap in memory.
+    static func draw(_ palette: ThemePalette, frame: WallpaperFrame, choice: WallpaperChoice) -> CGImage? {
+        guard var canvas = WallpaperCanvas(frame: frame, palette: palette, seed: choice.seed) else { return nil }
+        // Styles may change the transform (unit space) or blend mode; grain goes on untouched,
+        // in the image's own pixels.
         canvas.context.saveGState()
+        canvas.context.concatenate(canvas.canvasToPixels)
         painters[choice.style]?(&canvas)
         canvas.context.restoreGState()
         if choice.grain, !choice.style.isPixelBitmap { canvas.addGrain() }
@@ -65,6 +99,15 @@ enum WallpaperRenderer {
         .solid: { $0.fill($0.palette.background) },
     ]
 
+    /// Whether any display shows a generated wallpaper.
+    @MainActor
+    static func isOnScreen() -> Bool {
+        let folder = directory.standardizedFileURL.path + "/"
+        return NSScreen.screens.contains {
+            NSWorkspace.shared.desktopImageURL(for: $0)?.standardizedFileURL.path.hasPrefix(folder) == true
+        }
+    }
+
     /// Deletes all but the most recent generated wallpapers, sparing any on screen.
     @MainActor
     static func prune() {
@@ -87,17 +130,6 @@ enum WallpaperRenderer {
 
     // MARK: - Helpers
 
-    @MainActor
-    private static func largestScreenPixelSize() -> CGSize {
-        let sizes = NSScreen.screens.map {
-            CGSize(width: $0.frame.width * $0.backingScaleFactor, height: $0.frame.height * $0.backingScaleFactor)
-        }
-        let largest = sizes.max { $0.width * $0.height < $1.width * $1.height } ?? CGSize(width: 3840, height: 2160)
-        // Cap at 6K so a huge display can't produce an unreasonably large render.
-        let scale = min(1, 6144 / max(largest.width, largest.height))
-        return CGSize(width: (largest.width * scale).rounded(), height: (largest.height * scale).rounded())
-    }
-
     private static func writeJPEG(_ image: CGImage, to url: URL) -> Bool {
         guard let destination = CGImageDestinationCreateWithURL(
             url as CFURL, UTType.jpeg.identifier as CFString, 1, nil
@@ -114,9 +146,10 @@ enum WallpaperRenderer {
 }
 
 /// A bitmap plus the palette-derived tones and seeded randomness every style draws with.
-/// Coordinates are Core Graphics' (origin bottom-left); sizes scale with `unit`.
-/// Painted at 16 bits per channel and dithered down to 8, so wide soft gradients don't
-/// band into visible rings.
+/// Coordinates are Core Graphics' (origin bottom-left) over the whole canvas, which for a
+/// spanning picture is the display arrangement and larger than the bitmap; sizes scale with
+/// `unit`. Painted at 16 bits per channel and dithered down to 8, so wide soft gradients
+/// don't band into visible rings.
 struct WallpaperCanvas {
     let context: CGContext
     let rect: CGRect
@@ -124,30 +157,60 @@ struct WallpaperCanvas {
     let space: CGColorSpace
     let noise: ValueNoise
     var rng: SeededGenerator
+    /// One thousandth of a display's shorter side: keeps line widths and radii
+    /// resolution-independent, and the same size on a portrait display as on a landscape one.
+    let unit: CGFloat
+    /// One display's worth of the canvas (`WallpaperFrame.display`).
+    let display: CGSize
+    /// Where the displays are on the canvas: just `rect` unless spanning.
+    let displays: [CGRect]
+    /// `WallpaperFrame.transform`, under every style's own.
+    let canvasToPixels: CGAffineTransform
 
     init?(size: CGSize, palette: ThemePalette, seed: UInt64) {
-        guard size.width >= 1, size.height >= 1,
+        self.init(frame: .single(size), palette: palette, seed: seed)
+    }
+
+    /// The bitmap is `frame.pixels`; drawing in canvas coordinates needs `frame.transform`,
+    /// which `WallpaperRenderer.draw` sets up.
+    init?(frame: WallpaperFrame, palette: ThemePalette, seed: UInt64) {
+        guard frame.pixels.width >= 1, frame.pixels.height >= 1, frame.display.width >= 1, frame.display.height >= 1,
               let space = CGColorSpace(name: CGColorSpace.sRGB),
               let context = CGContext(
-                  data: nil, width: Int(size.width), height: Int(size.height), bitsPerComponent: 16,
+                  data: nil, width: Int(frame.pixels.width), height: Int(frame.pixels.height), bitsPerComponent: 16,
                   bytesPerRow: 0, space: space,
                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder16Little.rawValue
               )
         else { return nil }
         context.interpolationQuality = .high
         self.context = context
-        self.rect = CGRect(origin: .zero, size: size)
+        self.rect = CGRect(origin: .zero, size: frame.canvas)
         self.palette = palette
         self.space = space
         self.noise = ValueNoise(seed: seed ^ 0xA5A5_5A5A_1234_4321)
         self.rng = SeededGenerator(seed: seed)
+        self.unit = min(frame.display.width, frame.display.height) / 1000
+        self.display = frame.display
+        self.displays = frame.displays
+        self.canvasToPixels = frame.transform
     }
 
     var width: CGFloat { rect.width }
     var height: CGFloat { rect.height }
-    /// One thousandth of the height: keeps line widths and radii resolution-independent.
-    var unit: CGFloat { rect.height / 1000 }
     var isDark: Bool { palette.mode == .dark }
+
+    /// How many displays' worth of canvas there is across and down (1 × 1 unless spanning),
+    /// for styles that scatter a set number of things or fit a set number of cells.
+    var spread: CGSize { CGSize(width: width / display.width, height: height / display.height) }
+    /// Display areas the canvas holds: what a count tuned for one screen is multiplied by.
+    var spreadArea: CGFloat { spread.width * spread.height }
+
+    /// Whether any display shows `point` (in the current user space, so unit space works).
+    func isShown(_ point: CGPoint) -> Bool {
+        // Through the CTM, not `convertToDeviceSpace`: a bitmap's device space is flipped.
+        let onCanvas = point.applying(context.ctm).applying(canvasToPixels.inverted())
+        return displays.contains { $0.contains(onCanvas) }
+    }
 
     /// The deepest tone (dark themes) or the page itself (light themes).
     var base: ThemeColor { isDark ? palette.darkerBackground : palette.background }

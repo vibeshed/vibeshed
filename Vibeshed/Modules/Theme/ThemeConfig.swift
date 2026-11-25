@@ -29,6 +29,11 @@ struct ThemeConfig: Codable, Sendable, Equatable {
     /// Fine film grain texture on generated wallpapers.
     var wallpaperGrain = true
 
+    /// Lay a generated wallpaper across every display as one picture, following their
+    /// arrangement, in the styles that can (`WallpaperStyle.spans`). Off, or in other styles,
+    /// each display gets a whole picture of its own.
+    var wallpaperSpan = true
+
     /// Make the "Vibeshed" iTerm profile the default, so new windows and iTerm restarts
     /// keep the theme. `false` hands the default back to the profile it replaced.
     var itermDefaultProfile = true
@@ -77,6 +82,7 @@ struct ThemeConfig: Codable, Sendable, Equatable {
         wallpaperStyle = try container.decodeIfPresent(String.self, forKey: .wallpaperStyle)
             ?? defaults.wallpaperStyle
         wallpaperGrain = try container.decodeIfPresent(Bool.self, forKey: .wallpaperGrain) ?? defaults.wallpaperGrain
+        wallpaperSpan = try container.decodeIfPresent(Bool.self, forKey: .wallpaperSpan) ?? defaults.wallpaperSpan
         itermDefaultProfile = try container.decodeIfPresent(Bool.self, forKey: .itermDefaultProfile)
             ?? defaults.itermDefaultProfile
         terminalDefaultProfile = try container.decodeIfPresent(Bool.self, forKey: .terminalDefaultProfile)

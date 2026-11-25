@@ -29,6 +29,8 @@ actor ThemeModule: ModuleConfigurable {
     private var appWatchers: [AppLifecycleWatcher] = []
     private var appearanceWatcher: SystemAppearanceWatcher?
     private var appearanceSync: Task<Void, Never>?
+    private var screenObserver: NSObjectProtocol?
+    private var screenSync: Task<Void, Never>?
 
     /// The scripted targets that are on: appearance through System Events, iTerm's
     /// colors through iTerm, and the github target through browser tabs.
@@ -63,6 +65,11 @@ actor ThemeModule: ModuleConfigurable {
                 Task { await self?.systemAppearanceChanged() }
             }
         }
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: nil
+        ) { [weak self] _ in
+            Task { await self?.screensChanged() }
+        }
     }
 
     func teardown() async {
@@ -71,12 +78,24 @@ actor ThemeModule: ModuleConfigurable {
         }
         await appearanceWatcher?.stop()
         appearanceSync?.cancel()
+        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
+        screenSync?.cancel()
     }
 
     /// The latest change wins: each one restarts the sync in ThemeModule+Appearance.
     private func systemAppearanceChanged() {
         appearanceSync?.cancel()
         appearanceSync = Task { await syncWithSystemAppearance() }
+    }
+
+    /// Displays come and go in bursts of notifications; the last one, once they settle, counts.
+    private func screensChanged() {
+        screenSync?.cancel()
+        screenSync = Task {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            await redrawWallpaperForDisplays()
+        }
     }
 
     /// Resolves the theme after the delay, so a switch made meanwhile isn't undone.

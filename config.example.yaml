@@ -514,6 +514,8 @@ modules:
     #                                 # A style chosen with theme/wallpaperStyle overrides this;
     #                                 # a theme can set its own with `wallpaperStyle:`.
     # wallpaperGrain: true            # fine film grain on generated wallpapers
+    # wallpaperSpan: true             # spread one picture across all displays, as they're arranged, in
+    #                                 # the styles that can (patterns and fields); off, each display gets its own
 
     # What a theme is applied to (default: all but github, which changes an account setting):
     # targets: [appearance, accent, folders, icons, glass, menubar, pointer, wallpaper, iterm, ghostty,

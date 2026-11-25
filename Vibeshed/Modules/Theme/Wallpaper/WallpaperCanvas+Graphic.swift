@@ -11,14 +11,14 @@ extension WallpaperCanvas {
         glow(palette.accent, at: point(rng.between(0.6, 0.9), rng.between(0.6, 0.9)),
              radius: max(width, height) * 0.7, alpha: isDark ? 0.12 : 0.08)
 
-        let columns = 220
+        let columns = Int((220 * spread.width).rounded())
         let rows = max(2, Int(Double(columns) * Double(height / width)))
-        let offset = rng.between(0, 100)
+        let offset = rng.between(0, 100), across = 3.4 * spread.width
         var field = [[Double]](repeating: [Double](repeating: 0, count: columns + 1), count: rows + 1)
         for row in 0 ... rows {
             for column in 0 ... columns {
-                let x = Double(column) / Double(columns) * 3.4 + offset
-                let y = Double(row) / Double(rows) * 3.4 * Double(height / width) + offset
+                let x = Double(column) / Double(columns) * across + offset
+                let y = Double(row) / Double(rows) * across * Double(height / width) + offset
                 field[row][column] = noise.fractal(x, y, octaves: 4)
             }
         }
@@ -82,7 +82,7 @@ extension WallpaperCanvas {
             }
         }
 
-        let radius = height * 0.24
+        let radius = unit * 240
         let sun = CGPoint(x: width * rng.between(0.4, 0.6), y: horizonY + radius * 0.35)
         glow(palette.magenta.mix(palette.orange, 0.5), at: sun, radius: radius * 2.4, alpha: isDark ? 0.35 : 0.2)
         context.saveGState()

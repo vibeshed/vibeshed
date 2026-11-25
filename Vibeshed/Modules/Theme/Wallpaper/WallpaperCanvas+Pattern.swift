@@ -10,8 +10,10 @@ extension WallpaperCanvas {
     /// disc, half disc, disc, triangle, stripes, quarter ring or lens) turned to a random side.
     mutating func paintBauhaus() {
         enterUnitSpace()
-        let columns = 9, size = unitWidth / 9
-        let rows = Int((unitHeight / size).rounded(.up)), top = (unitHeight - CGFloat(rows) * size) / 2
+        // Nine across a display's longer side, whichever way it's turned.
+        let size = max(display.width, display.height) / unit / 9
+        let columns = Int((unitWidth / size - 0.001).rounded(.up)), left = (unitWidth - CGFloat(columns) * size) / 2
+        let rows = Int((unitHeight / size - 0.001).rounded(.up)), top = (unitHeight - CGFloat(rows) * size) / 2
         let hues = harmony(4)
         let strong = [palette.accent, hues.cycling(1), palette.yellow, palette.red]
             .map { muted($0, isDark ? 0.25 : 0.12) }
@@ -19,7 +21,9 @@ extension WallpaperCanvas {
         let colors = strong + neutrals + [palette.foreground.mix(base, isDark ? 0.35 : 0.15)]
         for row in 0 ..< rows {
             for column in 0 ..< columns {
-                let tile = CGRect(x: CGFloat(column) * size, y: top + CGFloat(row) * size, width: size, height: size)
+                let tile = CGRect(
+                    x: left + CGFloat(column) * size, y: top + CGFloat(row) * size, width: size, height: size
+                )
                 let back = rng.unit() < 0.6 ? rng.pick(neutrals) : rng.pick(strong)
                 var front = rng.pick(colors)
                 for _ in 0 ..< 8 where front == back {
@@ -104,7 +108,9 @@ extension WallpaperCanvas {
     /// small; the deeper a piece, the likelier it stays whole.
     private mutating func splitMondrian(_ area: CGRect, depth: Int, into panels: inout [CGRect]) {
         let wide = area.width > 240, tall = area.height > 180
-        if depth > 5 || (!wide && !tall) || (depth > 1 && rng.unit() < 0.16 * Double(depth)) {
+        // A canvas spanning several displays gets the extra cuts that keep its pieces screen-sized.
+        let level = depth - max(0, Int(log2(spreadArea).rounded()))
+        if level > 5 || (!wide && !tall) || (level > 1 && rng.unit() < 0.16 * Double(level)) {
             panels.append(area)
             return
         }
@@ -171,7 +177,7 @@ extension WallpaperCanvas {
         enterUnitSpace()
         fill(palette.background)
         let mottle = isDark ? palette.lighterBackground : palette.darkBackground
-        for _ in 0 ..< 7 {
+        for _ in 0 ..< Int((7 * spreadArea).rounded()) {
             let spot = CGPoint(x: unitWidth * rng.unit(), y: unitHeight * rng.unit())
             glow(mottle, at: spot, radius: rng.between(220, 520), alpha: 0.5)
         }
@@ -182,7 +188,8 @@ extension WallpaperCanvas {
             isDark ? palette.darkerBackground : palette.background.mix(.white, 0.7),
         ]
         var placed: [(center: CGPoint, radius: CGFloat)] = []
-        for _ in 0 ..< 6000 where placed.count < 460 {
+        let tries = Int((6000 * spreadArea).rounded()), most = Int((460 * spreadArea).rounded())
+        for _ in 0 ..< tries where placed.count < most {
             let radius = CGFloat(rng.unit() < 0.07 ? rng.between(24, 42) : rng.between(4, 14))
             let center = CGPoint(x: rng.between(-20, unitWidth + 20), y: rng.between(-20, unitHeight + 20))
             let crowded = placed.contains { other in
@@ -256,7 +263,7 @@ extension WallpaperCanvas {
         ]
         var placed: [(center: CGPoint, radius: CGFloat)] = []
         for round in rounds {
-            for _ in 0 ..< round.tries {
+            for _ in 0 ..< Int((Double(round.tries) * spreadArea).rounded()) {
                 let center = CGPoint(x: unitWidth * rng.unit(), y: unitHeight * rng.unit())
                 var room = round.largest
                 for other in placed {

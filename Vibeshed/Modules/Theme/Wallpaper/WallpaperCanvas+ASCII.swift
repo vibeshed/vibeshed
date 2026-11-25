@@ -17,7 +17,8 @@ extension WallpaperCanvas {
         fill(palette["desktop"] ?? base)
         let subject = rng.int(below: 3)
         // The Mandelbrot set gets a finer grid: its edge is all detail.
-        let grid = ASCIIGrid(width: width, height: height, rows: subject == 1 ? 90 : 60)
+        let rows = Int(((subject == 1 ? 90 : 60) * heightRatio).rounded())
+        let grid = ASCIIGrid(width: width, height: height, rows: rows)
         let figure = switch subject {
         case 0: torusFigure(grid: grid)
         case 1: mandelbrotFigure(grid: grid)
@@ -34,14 +35,15 @@ extension WallpaperCanvas {
         drawGlyphs(cells, grid: grid)
     }
 
-    /// The torus, about 56% of the screen's height, near the middle.
+    /// The torus, about 56% of a landscape screen's height, near the middle.
     private mutating func torusFigure(grid: ASCIIGrid) -> ASCIIFigure {
         let torus = ASCIITorus(
             tilt: rng.between(0.55, 1.25), turn: rng.between(0.2, 1.1), spin: rng.between(0, .pi * 2)
         )
         let center = (column: Double(grid.columns) * rng.between(0.44, 0.56), row: Double(grid.rows) * 0.5)
         let levels = torus.render(
-            columns: grid.columns, rows: grid.rows, center: center, halfHeight: Double(grid.rows) * 0.28
+            columns: grid.columns, rows: grid.rows, center: center,
+            halfHeight: Double(grid.rows) / Double(heightRatio) * 0.28
         )
         let ramp = Self.asciiRamp.count
         let shades = asciiShades(isDark
@@ -58,7 +60,7 @@ extension WallpaperCanvas {
                 }
             },
             glowCenter: CGPoint(x: CGFloat(center.column) * grid.cellWidth, y: height / 2),
-            glowRadius: height * 0.42, glowColor: palette.accent, haze: true
+            glowRadius: unit * 420, glowColor: palette.accent, haze: true
         )
     }
 

@@ -357,6 +357,7 @@ private extension ConfigDecodingCoverageTests {
         config.generateWallpapers = false
         config.wallpaperStyle = "mesh"
         config.wallpaperGrain = false
+        config.wallpaperSpan = false
         config.itermDefaultProfile = false
         config.terminalDefaultProfile = false
         config.folders = ["/f"]

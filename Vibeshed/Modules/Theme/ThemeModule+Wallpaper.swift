@@ -73,6 +73,19 @@ extension ThemeModule {
         return Self.summary(theme, results)
     }
 
+    /// Draws the generated wallpaper again for a changed display arrangement — a display
+    /// plugged in, unplugged, moved or resized — while one is on screen: a new display would
+    /// keep whatever macOS gave it, and a picture laid across the old arrangement would no
+    /// longer line up. When only the Dock or menu bar changed, the files are drawn already and
+    /// on screen, so nothing is set.
+    func redrawWallpaperForDisplays() async {
+        guard config.enabledTargets.contains(.wallpaper), config.generateWallpapers,
+              await WallpaperRenderer.isOnScreen(), let theme = await currentTheme()
+        else { return }
+        let options = ThemeApplier.Options(wallpaper: wallpaperChoice(for: theme), only: [.wallpaper])
+        await applier.applyUnlessPreviewing(theme.generatingWallpaper(), config: config, options: options)
+    }
+
     /// The applied theme, if it's still in the catalog.
     func currentTheme() async -> ResolvedTheme? {
         let slug = await MainActor.run { ActiveTheme.shared.committed?.slug }

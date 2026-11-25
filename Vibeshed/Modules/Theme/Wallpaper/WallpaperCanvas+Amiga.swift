@@ -17,7 +17,7 @@ extension WallpaperCanvas.Tone {
 /// The wall is the theme's desktop color, the grid its magenta, the ball its red.
 extension WallpaperCanvas {
     mutating func paintBoing() {
-        let dot = max(1, (height / 400).rounded())
+        let dot = max(1, (unit * 2.5).rounded())
         let columns = Double(Int((width / dot).rounded(.up))), rows = Double(Int((height / dot).rounded(.up)))
         let wall = palette["desktop"] ?? classicDesktop
         // The red nearest a full-strength one: themes darken `red` for paper or lighten it for ink.
@@ -29,7 +29,7 @@ extension WallpaperCanvas {
         let grid = BoingGrid(columns: columns, rows: rows)
         let ball = BoingBall(
             center: CGPoint(x: columns * rng.between(0.3, 0.62), y: rows * rng.between(0.34, 0.52)),
-            radius: rows * 0.2, tilt: (rng.unit() < 0.5 ? -1 : 1) * rng.between(0.25, 0.42),
+            radius: min(rows, columns) * 0.2, tilt: (rng.unit() < 0.5 ? -1 : 1) * rng.between(0.25, 0.42),
             spin: rng.between(0, .pi / 8)
         )
         let shadow = CGPoint(x: ball.center.x + ball.radius * 0.42, y: ball.center.y + ball.radius * 0.1)
