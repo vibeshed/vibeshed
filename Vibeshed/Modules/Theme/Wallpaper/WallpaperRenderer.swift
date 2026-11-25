@@ -56,7 +56,7 @@ enum WallpaperRenderer {
         .destijl: { $0.paintDeStijl() }, .truchet: { $0.paintTruchet() }, .terrazzo: { $0.paintTerrazzo() },
         .circles: { $0.paintCircles() }, .isometric: { $0.paintIsometric() }, .penrose: { $0.paintPenrose() },
         .flow: { $0.paintFlow() }, .lens: { $0.paintLens() }, .papercut: { $0.paintPaperCut() },
-        .automata: { $0.paintAutomata() }, .chladni: { $0.paintChladni() },
+        .automata: { $0.paintAutomata() }, .chladni: { $0.paintChladni() }, .cuttingmat: { $0.paintCuttingMat() },
         .leaves: { $0.paintLeaves() }, .warp: { $0.paintWarp() }, .ascii: { $0.paintASCII() },
         .polyhedra: { $0.paintPolyhedra() }, .maze: { $0.paintMaze() }, .dither: { $0.paintDither() },
         .pipes: { $0.paintPipes() }, .pebbles: { $0.paintPebbles() }, .macpattern: { $0.paintDesktopPattern() },

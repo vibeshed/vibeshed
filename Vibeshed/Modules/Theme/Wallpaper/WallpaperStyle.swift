@@ -5,7 +5,7 @@ enum WallpaperStyle: String, CaseIterable, Sendable {
     case glow, mesh, waves, ridges, bokeh, lowpoly, topographic, sunset, arcs
     case pulsar, guilloche, sashiko, attractor
     case bauhaus, destijl, truchet, terrazzo, circles, isometric, penrose
-    case flow, lens, papercut, automata, chladni
+    case flow, lens, papercut, automata, chladni, cuttingmat
     case leaves, warp, ascii, polyhedra, maze, dither, pipes
     case pebbles, macpattern, pinstripe
     case clouds, azul, winpattern, boing, rain
@@ -30,7 +30,7 @@ enum WallpaperStyle: String, CaseIterable, Sendable {
     /// would reshuffle every theme's stable pick. Those are opt-in, by name.
     var joinsAutomatic: Bool {
         switch self {
-        case .solid, .flow, .lens, .papercut, .automata, .chladni: false
+        case .solid, .flow, .lens, .papercut, .automata, .chladni, .cuttingmat: false
         default: !isPeriodPiece
         }
     }
@@ -75,6 +75,7 @@ enum WallpaperStyle: String, CaseIterable, Sendable {
         case .papercut: "Paper Cut"
         case .automata: "Automata"
         case .chladni: "Chladni"
+        case .cuttingmat: "Cutting Mat"
         case .leaves: "Leaves"
         case .warp: "Warp Speed"
         case .ascii: "ASCII Art"
@@ -121,6 +122,7 @@ enum WallpaperStyle: String, CaseIterable, Sendable {
         case .papercut: "Layered paper sheets with soft shadows, parting around a sun"
         case .automata: "Panels of elementary cellular automata, each running its own Wolfram rule"
         case .chladni: "Sand gathering on the still lines of a vibrating plate"
+        case .cuttingmat: "A self-healing cutting mat: numbered grid, angle guides and old knife scores"
         case .leaves: "Haiku's Leaves screen saver: gradient leaves piling up on the desktop"
         case .warp: "Star streaks at warp speed, after OS/2 Warp"
         case .ascii: "Terminal-character art: donut.c's lit torus, the Mandelbrot set or aafire's flames"
@@ -167,6 +169,7 @@ enum WallpaperStyle: String, CaseIterable, Sendable {
         case .papercut: "square.3.layers.3d.down.right"
         case .automata: "rectangle.split.3x3"
         case .chladni: "waveform.path"
+        case .cuttingmat: "ruler"
         case .leaves: "leaf"
         case .warp: "sparkles"
         case .ascii: "terminal"

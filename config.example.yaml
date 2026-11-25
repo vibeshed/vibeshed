@@ -509,8 +509,8 @@ modules:
     #                                 # arcs, pulsar, guilloche, sashiko, attractor, bauhaus, destijl,
     #                                 # truchet, terrazzo, circles, isometric, penrose, leaves, warp,
     #                                 # ascii, polyhedra, maze, dither, pipes, flow, lens, papercut,
-    #                                 # automata, chladni, solid,
-    #                                 # or auto (a stable pick per theme, never flow through chladni).
+    #                                 # automata, chladni, cuttingmat, solid,
+    #                                 # or auto (a stable pick per theme, never flow through cuttingmat).
     #                                 # A style chosen with theme/wallpaperStyle overrides this;
     #                                 # a theme can set its own with `wallpaperStyle:`.
     # wallpaperGrain: true            # fine film grain on generated wallpapers

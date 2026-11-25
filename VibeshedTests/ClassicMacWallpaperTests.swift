@@ -85,7 +85,7 @@ final class ClassicMacWallpaperTests: XCTestCase {
         let pieces = WallpaperStyle.allCases.filter(\.isPeriodPiece)
         XCTAssertEqual(Set(pieces), Set(bitmaps).union([.azul]))
         XCTAssertTrue(pieces.allSatisfy { !WallpaperStyle.varied.contains($0) })
-        let optIn: Set<WallpaperStyle> = [.flow, .lens, .papercut, .automata, .chladni]
+        let optIn: Set<WallpaperStyle> = [.flow, .lens, .papercut, .automata, .chladni, .cuttingmat]
         XCTAssertTrue(optIn.allSatisfy { !WallpaperStyle.varied.contains($0) }, "styles added later are opt-in")
         XCTAssertEqual(WallpaperStyle.varied.map(\.rawValue), Self.settledPool.filter { $0 != "halftone" })
     }

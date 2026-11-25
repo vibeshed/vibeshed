@@ -52,4 +52,11 @@ final class GenerativeWallpaperTests: XCTestCase {
         XCTAssertLessThan(scattered, 400, "sand starts out anywhere")
         XCTAssertGreaterThan(settled, 1800, "and ends up where the plate stands still")
     }
+
+    func testCuttingMatComesInEveryColorGreenMostOften() {
+        let picks = (0 ..< 1000).map { MatColor.pick(Double($0) / 1000) }
+        XCTAssertEqual(Set(picks), Set(MatColor.allCases))
+        let counts = Dictionary(grouping: picks, by: { $0 }).mapValues(\.count)
+        XCTAssertEqual(counts.max { $0.value < $1.value }?.key, .green)
+    }
 }
