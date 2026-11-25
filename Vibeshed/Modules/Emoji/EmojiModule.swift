@@ -112,11 +112,9 @@ actor EmojiModule: ModuleConfigurable {
     }
 
     private static func deliver(_ char: String, pasteOnSelect: Bool) async {
-        await MainActor.run {
-            ClipboardManager.writeToPasteboard(char)
-            if pasteOnSelect {
-                ClipboardManager.pasteFromPasteboard()
-            }
+        await ClipboardManager.writeToPasteboard(char)
+        if pasteOnSelect {
+            await ClipboardManager.pasteFromPasteboard()
         }
     }
 }
