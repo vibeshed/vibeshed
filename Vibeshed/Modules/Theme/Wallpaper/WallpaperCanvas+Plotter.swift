@@ -11,9 +11,9 @@ extension WallpaperCanvas {
     mutating func paintPulsar() {
         enterUnitSpace()
         fill(base)
-        let lines = 62, steps = 170, top: CGFloat = 220
+        let lines = 62, steps = 170, top = 220 + (unitHeight - 1000) / 2
         let span = min(unitWidth * rng.between(0.34, 0.42), 760), left = (unitWidth - span) / 2
-        let gap = (850 - top) / CGFloat(lines - 1)
+        let gap: CGFloat = 630 / CGFloat(lines - 1)
         context.setLineJoin(.round)
         context.setLineWidth(hairline(1.6))
         context.setStrokeColor(palette.foreground.cgColor)

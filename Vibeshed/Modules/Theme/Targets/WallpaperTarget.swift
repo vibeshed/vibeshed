@@ -2,8 +2,9 @@ import AppKit
 import Foundation
 
 /// Sets every screen's wallpaper to the theme's image, or — for themes without one — one
-/// generated from the palette in the chosen `WallpaperStyle`. Uses `NSWorkspace` directly (no Automation
-/// permission); like System Settings, it changes the wallpaper of the current Space.
+/// generated from the palette in the chosen `WallpaperStyle`, drawn for each display's own
+/// size (and laid across all of them in the styles that span). Uses `NSWorkspace` directly
+/// (no Automation permission); like System Settings, it changes the wallpaper of the current Space.
 struct WallpaperTarget: ThemeTarget {
     let id = ThemeTargetID.wallpaper
     let displayName = "Wallpaper"
@@ -12,22 +13,20 @@ struct WallpaperTarget: ThemeTarget {
     /// Renders (into the cache `apply` reads) ahead of the other targets.
     func prepare(_ request: ThemeApplyRequest) async {
         guard request.theme.wallpaper == nil, request.config.generateWallpapers else { return }
-        _ = await WallpaperRenderer.render(request.theme, choice: request.wallpaper)
+        _ = await Self.render(request)
     }
 
     func apply(_ request: ThemeApplyRequest) async -> ThemeTargetOutcome {
-        let url: URL
+        let outcome: ThemeTargetOutcome
         if let path = request.theme.wallpaper {
-            url = URL(fileURLWithPath: path)
+            outcome = await Self.set { _ in URL(fileURLWithPath: path) }
         } else if request.config.generateWallpapers {
-            guard let generated = await WallpaperRenderer.render(request.theme, choice: request.wallpaper) else {
-                return .failed("couldn't render a wallpaper")
-            }
-            url = generated
+            let generated = await Self.render(request)
+            guard !generated.isEmpty else { return .failed("couldn't render a wallpaper") }
+            outcome = await Self.set { generated[$0] }
         } else {
             return .skipped("theme has no wallpaper")
         }
-        let outcome = await Self.set(url)
         if !request.isPreview { await WallpaperRenderer.prune() }
         return outcome
     }
@@ -37,25 +36,34 @@ struct WallpaperTarget: ThemeTarget {
         return { await Self.restore(saved) }
     }
 
+    private static func render(_ request: ThemeApplyRequest) async -> [Int: URL] {
+        await WallpaperRenderer.render(
+            request.theme, choice: request.wallpaper, spanning: request.config.wallpaperSpan
+        )
+    }
+
     private struct SavedWallpaper: Sendable {
         let screenNumber: Int
         let url: URL
     }
 
+    /// Sets each screen's file, by display number; a screen without one is left alone.
     @MainActor
-    private static func set(_ url: URL) -> ThemeTargetOutcome {
-        // Already on every screen (a theme generated from the current wallpaper): leave it
-        // as System Settings set it up rather than re-setting it with our options.
-        let target = url.standardizedFileURL
-        if NSScreen.screens.allSatisfy({ NSWorkspace.shared.desktopImageURL(for: $0)?.standardizedFileURL == target }) {
-            return .applied()
+    private static func set(_ file: (Int) -> URL?) -> ThemeTargetOutcome {
+        let screens = NSScreen.screens.compactMap { screen in
+            screen.displayNumber.flatMap(file).map { (screen, $0.standardizedFileURL) }
+        }
+        // Already on screen (a theme generated from the current wallpaper): leave it as
+        // System Settings set it up rather than re-setting it with our options.
+        let changed = screens.filter { screen, url in
+            NSWorkspace.shared.desktopImageURL(for: screen)?.standardizedFileURL != url
         }
         let options: [NSWorkspace.DesktopImageOptionKey: Any] = [
             .imageScaling: NSImageScaling.scaleProportionallyUpOrDown.rawValue,
             .allowClipping: true,
         ]
         do {
-            for screen in NSScreen.screens {
+            for (screen, url) in changed {
                 try NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: options)
             }
             return .applied()
@@ -80,11 +88,5 @@ struct WallpaperTarget: ThemeTarget {
             guard let entry = saved.first(where: { $0.screenNumber == screen.displayNumber }) else { continue }
             try? NSWorkspace.shared.setDesktopImageURL(entry.url, for: screen, options: [:])
         }
-    }
-}
-
-private extension NSScreen {
-    var displayNumber: Int? {
-        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.intValue
     }
 }

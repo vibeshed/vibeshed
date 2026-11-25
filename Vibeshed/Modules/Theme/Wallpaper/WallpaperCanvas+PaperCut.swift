@@ -12,14 +12,14 @@ extension WallpaperCanvas {
     mutating func paintPaperCut() {
         enterUnitSpace()
         let tones = paperTones()
-        let gap = 95.45 * rng.between(0.9, 1.1), wave = rng.between(150, 195)
+        let gap = 95.45 * heightRatio * rng.between(0.9, 1.1), wave = rng.between(150, 195)
         let crest = rng.between(0.25, 0.75), drift = rng.between(-0.02, 0.02), opening = rng.between(0.44, 0.52)
         let edges = PaperEdges(
             width: Double(unitWidth), crest: crest, drift: drift,
             shared: (0 ..< PaperEdges.anchors).map { _ in rng.unit() * 2 - 1 }
         )
-        linear(tones.ground, from: CGPoint(x: 0, y: 600), to: CGPoint(x: unitWidth, y: unitHeight))
-        let lowerStart = 1000 * opening + gap * 0.28
+        linear(tones.ground, from: CGPoint(x: 0, y: 600 * heightRatio), to: CGPoint(x: unitWidth, y: unitHeight))
+        let lowerStart = unitHeight * opening + gap * 0.28
         for layer in stride(from: 3, through: 0, by: -1) {
             let depth = Double(layer) / 3
             let edge = edges.edge(
@@ -29,13 +29,13 @@ extension WallpaperCanvas {
             paintSheet(edge, color: tones.lower(depth), shadow: tones.shadow)
         }
         paintPaperSun(
-            crestX: Double(unitWidth) * crest, crestY: 1000 * opening - wave, colors: tones.sun,
+            crestX: Double(unitWidth) * crest, crestY: unitHeight * opening - wave, colors: tones.sun,
             shadowAlpha: tones.shadowAlpha
         )
         for layer in stride(from: 4, through: 0, by: -1) {
             let depth = Double(layer) / 4
             let edge = edges.edge(
-                mean: 1000 * opening - Double(4 - layer) * gap, amplitude: wave * (0.34 + 0.66 * depth),
+                mean: unitHeight * opening - Double(4 - layer) * gap, amplitude: wave * (0.34 + 0.66 * depth),
                 centered: Double(layer) - 2, lower: false, using: &rng
             )
             paintSheet(edge, color: tones.upper(depth), shadow: tones.shadow)
@@ -64,7 +64,8 @@ extension WallpaperCanvas {
         context.saveGState()
         context.addPath(sheet)
         context.clip()
-        linear([color.lightened(0.0385), color, color.darkened(0.07)], from: .zero, to: CGPoint(x: unitWidth, y: 1000))
+        let shades = [color.lightened(0.0385), color, color.darkened(0.07)]
+        linear(shades, from: .zero, to: CGPoint(x: unitWidth, y: unitHeight))
         context.restoreGState()
     }
 

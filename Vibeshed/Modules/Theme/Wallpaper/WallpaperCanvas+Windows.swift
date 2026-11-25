@@ -52,11 +52,11 @@ extension WallpaperCanvas {
         enterUnitSpace()
         let sky = daySky
         linear([sky.darkened(0.2), sky, sky.lightened(0.28)], from: .zero, to: CGPoint(x: 0, y: unitHeight))
-        let count = Int(unitWidth / 170) + rng.int(below: 4)
+        let count = Int(unitWidth * heightRatio / 170) + rng.int(below: 4)
         // Top to bottom, so nearer (higher, bigger) clouds overlap the distant ones below.
-        let rows = (0 ..< count).map { _ in rng.between(40, 960) }.sorted(by: >)
+        let rows = (0 ..< count).map { _ in rng.between(40, 960) * heightRatio }.sorted(by: >)
         for row in rows {
-            let depth = 1.3 - 0.6 * row / 1000
+            let depth = 1.3 - 0.6 * row / unitHeight
             let size = rng.between(0.75, 1.25) * depth
             paintCumulus(
                 at: CGPoint(x: rng.between(-80, unitWidth + 80), y: row),
@@ -105,7 +105,7 @@ extension WallpaperCanvas {
             ThemeColor(hue: hue, saturation: min(1, saturation * 1.15), lightness: $0)
         }
         linear(ground, from: .zero, to: CGPoint(x: unitWidth, y: unitHeight))
-        let center = CGPoint(x: unitWidth * rng.between(0.3, 0.7), y: rng.between(300, 700))
+        let center = CGPoint(x: unitWidth * rng.between(0.3, 0.7), y: rng.between(300, 700) * heightRatio)
         glow(deep, at: center, radius: 900, alpha: 0.35)
         context.setBlendMode(.plusLighter)
         context.setLineCap(.round)
@@ -118,7 +118,7 @@ extension WallpaperCanvas {
 
     /// One twisting ribbon from edge to edge.
     private mutating func paintRibbon(tint: ThemeColor) {
-        let (middle, slope) = (rng.between(250, 750), rng.between(-0.3, 0.3))
+        let (middle, slope) = (rng.between(250, 750) * heightRatio, rng.between(-0.3, 0.3))
         let waves = (0 ..< 2).map { _ in
             (amplitude: rng.between(50, 170), frequency: 2 * .pi / (unitWidth * rng.between(0.6, 1.5)),
              phase: rng.between(0, 2 * .pi))

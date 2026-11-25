@@ -21,13 +21,15 @@ extension WallpaperCanvas {
     /// The face: light falling from the top-left, mottled faintly like molded vinyl. Computed
     /// small and stretched, since it only varies over tens of centimeters.
     private func paintMatSurface(_ face: ThemeColor) {
-        let columns = 200, rows = max(2, Int(200 * unitHeight / unitWidth))
+        let columns = Int((200 * spread.width).rounded()), rows = max(2, Int(CGFloat(columns) * unitHeight / unitWidth))
+        let mottling = 6 * Double(spread.width)
         var pixels = [UInt8](repeating: 255, count: columns * rows * 4)
         for row in 0 ..< rows {
             for column in 0 ..< columns {
                 let across = Double(column) / Double(columns - 1), down = Double(row) / Double(rows - 1)
                 let light = 0.045 * (1 - 2 * (across * 0.6 + down * 0.4))
-                let mottle = (noise.fractal(across * 6, down * 6 * Double(rows) / Double(columns)) - 0.5) * 0.06
+                let mottle = (noise.fractal(across * mottling, down * mottling * Double(rows) / Double(columns)) - 0.5)
+                    * 0.06
                 let shade = light + mottle
                 let color = shade >= 0 ? face.mix(.white, shade) : face.mix(.black, -shade)
                 let index = (row * columns + column) * 4
@@ -133,9 +135,17 @@ extension WallpaperCanvas {
     /// protractor arc, and a set of concentric circles toward the far side.
     private mutating func paintMatGuides(_ ruling: MatRuling, ink: ThemeColor) {
         let frame = ruling.frame
-        let fromLeft = rng.unit() < 0.5, fromTop = rng.unit() < 0.3
-        let corner = CGPoint(x: fromLeft ? frame.minX : frame.maxX, y: fromTop ? frame.minY : frame.maxY)
-        let fan = MatFan(corner: corner, rightward: fromLeft, downward: fromTop)
+        var fromLeft = rng.unit() < 0.5, fromTop = rng.unit() < 0.3
+        let corner = { (left: Bool, top: Bool) in
+            CGPoint(x: left ? frame.minX : frame.maxX, y: top ? frame.minY : frame.maxY)
+        }
+        // A mat spread over several displays can have corners no display shows: the fan
+        // goes to the nearest one that's on screen.
+        let candidates = [(fromLeft, fromTop), (!fromLeft, fromTop), (fromLeft, !fromTop), (!fromLeft, !fromTop)]
+        if let shown = candidates.first(where: { isShown(corner($0.0, $0.1)) }) {
+            (fromLeft, fromTop) = shown
+        }
+        let fan = MatFan(corner: corner(fromLeft, fromTop), rightward: fromLeft, downward: fromTop)
         let radius = ruling.cell * (ruling.metric ? 12 : 5)
         let font = CTFontCreateWithName("DINAlternate-Bold" as CFString, 11, nil)
 
@@ -143,7 +153,7 @@ extension WallpaperCanvas {
         context.clip(to: frame)
         let lines = CGMutablePath(), arc = CGMutablePath()
         for degrees in [30.0, 45, 60] {
-            lines.addLines(between: [corner, fan.point(degrees, at: frame.width + frame.height)])
+            lines.addLines(between: [fan.corner, fan.point(degrees, at: frame.width + frame.height)])
         }
         for step in 0 ... 90 {
             let degrees = Double(step), point = fan.point(degrees, at: radius)
@@ -165,7 +175,7 @@ extension WallpaperCanvas {
                 angle: placement.angle
             )
         }
-        paintMatCircles(ruling, ink: ink, awayFrom: corner)
+        paintMatCircles(ruling, ink: ink, awayFrom: fan.corner)
     }
 
     /// Concentric circles at a grid crossing in the half of the mat away from the fan, with
@@ -176,14 +186,19 @@ extension WallpaperCanvas {
         let rings = 5, reach = step * CGFloat(rings) + ruling.cell
         let spanX = max(0, Int((frame.width / 2 - reach * 2) / ruling.cell))
         let spanY = max(0, Int((frame.height - reach * 2) / ruling.cell))
-        let offsetX = reach + CGFloat(rng.int(below: spanX + 1)) * ruling.cell
-        let offsetY = reach + CGFloat(rng.int(below: spanY + 1)) * ruling.cell
-        let x = corner.x == frame.minX ? frame.maxX - offsetX : frame.minX + offsetX
-        let y = corner.y == frame.minY ? frame.maxY - offsetY : frame.minY + offsetY
-        let center = CGPoint(
-            x: frame.minX + ((x - frame.minX) / ruling.cell).rounded() * ruling.cell,
-            y: frame.minY + ((y - frame.minY) / ruling.cell).rounded() * ruling.cell
-        )
+        var center = CGPoint.zero
+        // On a mat spread over several displays, picked again until a display shows it.
+        for _ in 0 ..< 24 {
+            let offsetX = reach + CGFloat(rng.int(below: spanX + 1)) * ruling.cell
+            let offsetY = reach + CGFloat(rng.int(below: spanY + 1)) * ruling.cell
+            let x = corner.x == frame.minX ? frame.maxX - offsetX : frame.minX + offsetX
+            let y = corner.y == frame.minY ? frame.maxY - offsetY : frame.minY + offsetY
+            center = CGPoint(
+                x: frame.minX + ((x - frame.minX) / ruling.cell).rounded() * ruling.cell,
+                y: frame.minY + ((y - frame.minY) / ruling.cell).rounded() * ruling.cell
+            )
+            if isShown(center) { break }
+        }
         let circles = CGMutablePath()
         for ring in 1 ... rings {
             let radius = step * CGFloat(ring)
@@ -203,10 +218,11 @@ extension WallpaperCanvas {
     private mutating func paintMatScores(_ ruling: MatRuling, ink: ThemeColor) {
         let area = ruling.frame.insetBy(dx: -20, dy: -20)
         var cuts: [(CGPoint, CGPoint)] = []
-        for _ in 0 ..< 6 + rng.int(below: 5) {
+        let scale = Double(spreadArea)
+        for _ in 0 ..< Int((Double(6 + rng.int(below: 5)) * scale).rounded()) {
             cuts += straightedgeCuts(ruling, in: area)
         }
-        for _ in 0 ..< 8 + rng.int(below: 9) {
+        for _ in 0 ..< Int((Double(8 + rng.int(below: 9)) * scale).rounded()) {
             let angle = CGFloat(rng.between(0, .pi)), length = CGFloat(rng.between(8, 55))
             let start = randomPoint(in: area)
             cuts.append((start, CGPoint(x: start.x + cos(angle) * length, y: start.y + sin(angle) * length)))

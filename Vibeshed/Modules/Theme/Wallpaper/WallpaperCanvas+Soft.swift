@@ -2,10 +2,11 @@ import CoreGraphics
 import Foundation
 
 /// A smooth color field: palette colors pinned at random points, blended by inverse
-/// distance. Shared by the mesh and low-poly styles.
+/// distance. Shared by the mesh and low-poly styles. Points are at fractions of the canvas;
+/// `scale` turns those into display heights, the distance the blend is tuned for.
 struct MeshField {
     let points: [(x: Double, y: Double, color: ThemeColor)]
-    let aspect: Double
+    let scale: (x: Double, y: Double)
 
     func color(at x: Double, _ y: Double) -> ThemeColor {
         var weights = 0.0
@@ -13,8 +14,8 @@ struct MeshField {
         var green = 0.0
         var blue = 0.0
         for point in points {
-            let dx = (x - point.x) * aspect
-            let dy = y - point.y
+            let dx = (x - point.x) * scale.x
+            let dy = (y - point.y) * scale.y
             let weight = 1 / pow(dx * dx + dy * dy + 0.015, 1.7)
             weights += weight
             red += point.color.red * weight
@@ -51,14 +52,20 @@ extension WallpaperCanvas {
             muted(tones.count > 1 ? tones[1] : palette.magenta, isDark ? 0.5 : 0.45),
             muted(tones.count > 2 ? tones[2] : palette.cyan, isDark ? 0.6 : 0.5),
         ]
-        let points = colors.map { (x: rng.between(-0.1, 1.1), y: rng.between(-0.1, 1.1), color: $0) }
-        return MeshField(points: points, aspect: Double(width / height))
+        // A set of colors per display's worth of canvas, so a spanning field isn't one screen's
+        // blend stretched across all of them.
+        let sets = max(1, Int(spreadArea.rounded()))
+        let points = (0 ..< sets * colors.count).map { index in
+            (x: rng.between(-0.1, 1.1), y: rng.between(-0.1, 1.1), color: colors[index % colors.count])
+        }
+        let displayHeight = Double(display.height)
+        return MeshField(points: points, scale: (Double(width) / displayHeight, Double(height) / displayHeight))
     }
 
     /// Computed at low resolution and scaled up — the field is smooth, so nothing is lost.
     mutating func paintMesh() {
         let field = meshField()
-        let columns = 160
+        let columns = Int((160 * spread.width).rounded())
         let rows = max(1, Int(Double(columns) * Double(height / width)))
         var pixels = [UInt8](repeating: 255, count: columns * rows * 4)
         for row in 0 ..< rows {
@@ -90,14 +97,14 @@ extension WallpaperCanvas {
             let depth = Double(layer) / Double(layers - 1) // 0 = back, 1 = front
             let baseline = height * (0.7 - 0.5 * depth)
             let amplitude = unit * rng.between(28, 55)
-            let frequency = rng.between(0.7, 1.5)
+            let frequency = rng.between(0.7, 1.5) * spread.width
             let phase = rng.between(0, .pi * 2)
             let ripple = rng.between(0, .pi * 2)
             let color = muted(tones[layer % tones.count], isDark ? 0.84 - 0.34 * depth : 0.8 - 0.32 * depth)
 
             let path = CGMutablePath()
             path.move(to: .zero)
-            let steps = 120
+            let steps = Int((120 * spread.width).rounded())
             for step in 0 ... steps {
                 let x = Double(step) / Double(steps)
                 let y = baseline + amplitude * sin(2 * .pi * frequency * x + phase)
@@ -176,7 +183,7 @@ extension WallpaperCanvas {
 
     mutating func paintLowPoly() {
         let field = meshField()
-        let columns = 18
+        let columns = Int((18 * spread.width).rounded())
         let rows = max(2, Int((Double(columns) * Double(height / width)).rounded()))
         var grid: [[CGPoint]] = []
         for row in 0 ... rows {

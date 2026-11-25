@@ -35,6 +35,18 @@ enum WallpaperStyle: String, CaseIterable, Sendable {
         }
     }
 
+    /// Styles that can lay one picture across every display, following their arrangement:
+    /// patterns and fields that read the same wherever they're cut. The rest center on one
+    /// subject, so each display gets its own whole picture.
+    var spans: Bool {
+        switch self {
+        case .mesh, .waves, .lowpoly, .topographic, .sashiko, .bauhaus, .destijl, .truchet, .terrazzo, .circles,
+             .isometric, .penrose, .maze, .cuttingmat:
+            true
+        default: false
+        }
+    }
+
     /// Styles drawn in whole-pixel bitmaps, where film grain would spoil the hard edges.
     var isPixelBitmap: Bool {
         switch self {

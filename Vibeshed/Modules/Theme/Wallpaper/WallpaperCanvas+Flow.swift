@@ -40,7 +40,7 @@ extension WallpaperCanvas {
         ]
         let wave = rng.between(0.006, 0.012), phase = rng.between(0, 2 * .pi)
         let disc = (
-            center: CGPoint(x: unitWidth * rng.between(0.22, 0.78), y: 1000 * rng.between(0.38, 0.68)),
+            center: CGPoint(x: unitWidth * rng.between(0.22, 0.78), y: unitHeight * rng.between(0.38, 0.68)),
             radius: rng.between(95, 135)
         )
         var discDrawn = false

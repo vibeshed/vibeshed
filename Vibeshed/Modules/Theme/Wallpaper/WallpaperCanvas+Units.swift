@@ -1,13 +1,16 @@
 import CoreGraphics
 import Foundation
 
-/// Unit space, where the generative styles draw: the canvas is 1000 units tall at any
-/// resolution (so a style reads the same in a thumbnail and on a 6K display), the origin
-/// is the top-left corner and y points down — the layout of the canvas prototypes the
-/// styles were designed in.
+/// Unit space, where the generative styles draw: a display's shorter side is 1000 units at
+/// any resolution (so a style reads the same in a thumbnail and on a 6K display, and a
+/// landscape canvas is 1000 units tall), the origin is the top-left corner and y points
+/// down — the layout of the canvas prototypes the styles were designed in.
 extension WallpaperCanvas {
-    var unitHeight: CGFloat { 1000 }
+    var unitHeight: CGFloat { height / unit }
     var unitWidth: CGFloat { width / unit }
+    /// How the canvas's height compares with the 1000 units the styles were laid out on: 1 on
+    /// a landscape display, 1.5 on a 2:3 portrait one. Vertical positions scale by it.
+    var heightRatio: CGFloat { unitHeight / 1000 }
 
     /// Switches the context to unit space for the rest of the style. The renderer saves
     /// the graphics state around every style, so there's nothing to undo.

@@ -95,10 +95,12 @@ extension WallpaperCanvas {
     mutating func paintDither() {
         let dot = max(1, (4.4 * unit).rounded())
         let columns = Int((width / dot).rounded(.up)), rows = Int((height / dot).rounded(.up))
+        let radius = Double(min(rows, columns)) * rng.between(0.36, 0.46)
+        // Right of center, but on a portrait display not off its edge.
+        let centerX = min(Double(columns) * rng.between(0.56, 0.74), Double(columns) - radius * 1.08)
         let planet = DitherPlanet(
-            radius: Double(rows) * rng.between(0.36, 0.46), centerX: Double(columns) * rng.between(0.56, 0.74),
-            centerY: Double(rows) * rng.between(0.46, 0.6), tilt: rng.between(-0.4, 0.4),
-            bands: rng.between(7, 12), offset: rng.between(0, 50)
+            radius: radius, centerX: centerX, centerY: Double(rows) * rng.between(0.46, 0.6),
+            tilt: rng.between(-0.4, 0.4), bands: rng.between(7, 12), offset: rng.between(0, 50)
         )
         let tones = ditherTones().map { [UInt8($0.red8), UInt8($0.green8), UInt8($0.blue8)] }
         var pixels = [UInt8](repeating: 255, count: columns * rows * 4)

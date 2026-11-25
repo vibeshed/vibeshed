@@ -6,7 +6,7 @@ import Foundation
 extension WallpaperCanvas {
     /// The Mandelbrot set shaded by escape time, the set itself dotted so it glows at the rim.
     mutating func mandelbrotFigure(grid: ASCIIGrid) -> ASCIIFigure {
-        let view = ASCIIMandelbrot(real: -0.62 + rng.between(-0.08, 0.08), span: rng.between(3, 3.4))
+        let view = ASCIIMandelbrot(real: -0.62 + rng.between(-0.08, 0.08), span: rng.between(3, 3.4) * heightRatio)
         let values = view.render(columns: grid.columns, rows: grid.rows)
         // A palette with few saturated hues (a grayscale one) gives fewer than three.
         let tones = harmony(3)
@@ -24,7 +24,7 @@ extension WallpaperCanvas {
                 let level = Int((value - 0.3) / 0.7 * Double(ramp))
                 return level > 0 ? ASCIIMark(glyph: min(level, ramp - 1), color: shades[min(level, ramp - 1)]) : nil
             },
-            glowCenter: CGPoint(x: width / 2, y: height / 2), glowRadius: height * 0.5,
+            glowCenter: CGPoint(x: width / 2, y: height / 2), glowRadius: unit * 500,
             glowColor: palette.accent, haze: false
         )
     }

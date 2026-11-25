@@ -79,7 +79,7 @@ extension WallpaperCanvas {
         let rotation = Rotation3(yaw: turn(&rng), pitch: turn(&rng), roll: turn(&rng))
         let vertices = solid.vertices.map(rotation.apply)
 
-        let radius = Double(height) * 0.34
+        let radius = Double(unit) * 340
         let center = point(rng.between(0.3, 0.7), rng.between(0.35, 0.65))
         let camera = 3.2
         let screen = vertices.map { vertex in
